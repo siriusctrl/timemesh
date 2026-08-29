@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Opening TimeMesh</title>
+    <script>
+      (function () {
+        var location = window.location;
+        var pathSegmentsToKeep = 1;
+        var base = location.pathname.split("/").slice(0, 1 + pathSegmentsToKeep).join("/");
+        var route = location.pathname.slice(base.length).replace(/&/g, "~and~");
+        location.replace(
+          location.protocol + "//" + location.hostname +
+          (location.port ? ":" + location.port : "") +
+          base + "/?/" + route.replace(/^\//, "") +
+          location.search.replace("?", "&") + location.hash
+        );
+      })();
+    </script>
+  </head>
+  <body>Opening TimeMesh...</body>
+</html>

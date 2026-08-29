@@ -1,0 +1,42 @@
+{
+  "name": "timemesh",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "token": "tsx skills/plan-time-with-tokens/scripts/time-token.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run test && npm run build",
+    "verify:ui": "playwright test",
+    "verify:proof": "node scripts/record-proof.mjs",
+    "setup:browsers": "playwright install chromium webkit",
+    "skill:check": "python3 /root/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/plan-time-with-tokens"
+  },
+  "dependencies": {
+    "@fontsource-variable/manrope": "^5.3.0",
+    "@fontsource/dm-mono": "^5.3.0",
+    "@js-temporal/polyfill": "^0.5.1",
+    "@phosphor-icons/react": "^2.1.10",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.3.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.0",
+    "sharp": "^0.35.4",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
+}

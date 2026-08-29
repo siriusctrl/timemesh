@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f2f5f0" />
+    <meta
+      name="description"
+      content="Plan shared time with portable, reversible availability tokens. No account and no backend."
+    />
+    <script>
+      (function (location) {
+        if (location.search.startsWith("?/")) {
+          var restored = location.search.slice(2).replace(/~and~/g, "&");
+          window.history.replaceState(null, "", location.pathname + restored + location.hash);
+        }
+      })(window.location);
+    </script>
+    <title>TimeMesh - Shared time, encoded</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "ranges": [
+    {
+      "start": "2026-09-01T00:00+08:00[Asia/Shanghai]",
+      "end": "2026-09-01T09:00+08:00[Asia/Shanghai]"
+    },
+    {
+      "start": "2026-09-01T18:00+08:00[Asia/Shanghai]",
+      "end": "2026-09-02T09:00+08:00[Asia/Shanghai]"
+    }
+  ]
+}

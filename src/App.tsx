@@ -1,0 +1,503 @@
+import {
+  BracketsCurly,
+  Check,
+  Copy,
+  Eye,
+  EyeSlash,
+  Moon,
+  Robot,
+  ShieldCheck,
+  Sun,
+  UsersThree,
+} from "@phosphor-icons/react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import agentSkill from "../skills/plan-time-with-tokens/SKILL.md?raw";
+import { CalendarGrid, type CalendarMode } from "./components/CalendarGrid";
+import { FramePanel, type FrameSettings } from "./components/FramePanel";
+import { PlannerPanel } from "./components/PlannerPanel";
+import { SkillDrawer } from "./components/SkillDrawer";
+import { TokenConsole } from "./components/TokenConsole";
+import { bitsetToSet, countBits, createBitset, getBit } from "./protocol/bits";
+import {
+  decodeParticipantToken,
+  decodeTokenBundle,
+  encodeBaseToken,
+  encodeParticipantToken,
+  extractTokens,
+} from "./protocol/codec";
+import { availabilityScores, findCandidateWindows } from "./protocol/planner";
+import {
+  baseStartDate,
+  baseWindowDays,
+  createBaseAllocation,
+  describeBaseRange,
+  systemTimeZone,
+  todayInTimeZone,
+  workHoursSlotSet,
+} from "./protocol/time";
+import {
+  BASE_TOKEN_PREFIX,
+  DEFAULT_SLOT_MINUTES,
+  PARTICIPANT_TOKEN_PREFIX,
+  type BaseAllocation,
+  type ParticipantAllocation,
+  type TokenError,
+} from "./protocol/types";
+
+type Theme = "light" | "dark";
+type Notice = { kind: "success" | "error" | "info"; message: string };
+
+function initialTheme(): Theme {
+  try {
+    const saved = window.localStorage.getItem("timemesh-theme");
+    if (saved === "light" || saved === "dark") return saved;
+  } catch {
+    // System preference remains available when storage is disabled.
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function createInitialState(): { settings: FrameSettings; base: BaseAllocation } {
+  const timezone = systemTimeZone();
+  const settings: FrameSettings = {
+    startDate: todayInTimeZone(timezone),
+    days: 14,
+    timezone,
+    slotMinutes: DEFAULT_SLOT_MINUTES,
+    meetingMinutes: 60,
+  };
+  return { settings, base: createBaseAllocation(settings) };
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return "The token could not be processed.";
+}
+
+function routeToken(): string | null {
+  const pathMatch = window.location.pathname.match(/\/t\/(tm1[bp]_[A-Za-z0-9_-]+)/u);
+  if (pathMatch) return pathMatch[1];
+  const hashMatch = window.location.hash.match(/^#\/?(tm1[bp]_[A-Za-z0-9_-]+)/u);
+  return hashMatch?.[1] ?? null;
+}
+
+function safeTimeZone(candidate: string, fallback: string): string {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: candidate }).format(0);
+    return candidate;
+  } catch {
+    return fallback;
+  }
+}
+
+export default function App() {
+  const initial = useMemo(createInitialState, []);
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [mode, setMode] = useState<CalendarMode>("base");
+  const [settings, setSettings] = useState<FrameSettings>(initial.settings);
+  const [base, setBase] = useState<BaseAllocation>(initial.base);
+  const [blockedSlots, setBlockedSlots] = useState<Set<number>>(new Set());
+  const [freeSlots, setFreeSlots] = useState<Set<number>>(new Set());
+  const [baseToken, setBaseToken] = useState("");
+  const [participantToken, setParticipantToken] = useState("");
+  const [participantTokens, setParticipantTokens] = useState<string[]>([]);
+  const [participants, setParticipants] = useState<ParticipantAllocation[]>([]);
+  const [tokenInput, setTokenInput] = useState("");
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [displayTimezone, setDisplayTimezone] = useState(systemTimeZone);
+  const [fullDay, setFullDay] = useState(false);
+  const [skillOpen, setSkillOpen] = useState(false);
+  const [copiedValue, setCopiedValue] = useState<"token" | "url" | null>(null);
+
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    try {
+      window.localStorage.setItem("timemesh-theme", theme);
+    } catch {
+      // The selected theme still applies to the current tab.
+    }
+  }, [theme]);
+
+  const scores = useMemo(
+    () => availabilityScores(base, participants),
+    [base, participants],
+  );
+  const candidates = useMemo(
+    () => findCandidateWindows(base, participants),
+    [base, participants],
+  );
+  const effectiveDisplayTimezone = useMemo(
+    () => safeTimeZone(displayTimezone, base.timezone),
+    [base.timezone, displayTimezone],
+  );
+
+  const markBaseDirty = (nextBlocked: Set<number>) => {
+    setBlockedSlots(nextBlocked);
+    if (baseToken) {
+      setBaseToken("");
+      setParticipantToken("");
+      setParticipantTokens([]);
+      setParticipants([]);
+      setNotice({ kind: "info", message: "Base availability changed. Generate a new base token before collecting responses." });
+    }
+  };
+
+  const updateSettings = (next: FrameSettings) => {
+    const validMeeting = next.meetingMinutes % next.slotMinutes === 0
+      ? next.meetingMinutes
+      : Math.max(next.slotMinutes, Math.ceil(next.meetingMinutes / next.slotMinutes) * next.slotMinutes);
+    const normalized = { ...next, meetingMinutes: validMeeting };
+    try {
+      const nextBase = createBaseAllocation(normalized);
+      setSettings(normalized);
+      setBase(nextBase);
+      setBlockedSlots(new Set());
+      setFreeSlots(new Set());
+      setBaseToken("");
+      setParticipantToken("");
+      setParticipantTokens([]);
+      setParticipants([]);
+      setNotice(null);
+    } catch (error) {
+      setSettings(normalized);
+      setNotice({ kind: "error", message: errorMessage(error) });
+    }
+  };
+
+  const applyWorkHours = () => {
+    const workHours = workHoursSlotSet(base, base.timezone, 9, 18, true);
+    if (mode === "base") {
+      const unavailable = new Set<number>();
+      for (let index = 0; index < base.slotCount; index += 1) {
+        if (!workHours.has(index)) unavailable.add(index);
+      }
+      markBaseDirty(unavailable);
+    } else if (mode === "respond") {
+      const available = new Set<number>();
+      for (const index of workHours) {
+        if (!getBit(base.unavailable, index)) available.add(index);
+      }
+      setFreeSlots(available);
+      setParticipantToken("");
+    }
+  };
+
+  const clearSelection = () => {
+    if (mode === "base") markBaseDirty(new Set());
+    else {
+      setFreeSlots(new Set());
+      setParticipantToken("");
+    }
+  };
+
+  const generateBase = () => {
+    try {
+      const nextBase = { ...base, unavailable: createBitset(base.slotCount, blockedSlots) };
+      const token = encodeBaseToken(nextBase);
+      setBase(nextBase);
+      setBaseToken(token);
+      setParticipantToken("");
+      setTokenInput(token);
+      setNotice({ kind: "success", message: "Base token generated and verified locally." });
+    } catch (error) {
+      setNotice({ kind: "error", message: errorMessage(error) });
+    }
+  };
+
+  const generateParticipant = async () => {
+    if (!baseToken) return;
+    setBusy(true);
+    try {
+      const token = await encodeParticipantToken(baseToken, base, freeSlots);
+      await decodeParticipantToken(token, baseToken, base);
+      setParticipantToken(token);
+      setTokenInput(`${baseToken}\n${token}`);
+      setNotice({ kind: "success", message: "Participant token generated. It does not duplicate the base availability." });
+    } catch (error) {
+      setNotice({ kind: "error", message: errorMessage(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openTokens = async (input = tokenInput) => {
+    setBusy(true);
+    try {
+      const pasted = extractTokens(input);
+      const hasBase = pasted.some((token) => token.startsWith(BASE_TOKEN_PREFIX));
+      const source = hasBase || !baseToken ? input : `${baseToken}\n${input}`;
+      const bundle = await decodeTokenBundle(source);
+      const uniqueParticipantTokens = [...new Set(bundle.participantTokens)];
+      const uniqueParticipants = await Promise.all(
+        uniqueParticipantTokens.map((token) => decodeParticipantToken(token, bundle.baseToken, bundle.base)),
+      );
+      setBase(bundle.base);
+      setSettings({
+        startDate: baseStartDate(bundle.base),
+        days: baseWindowDays(bundle.base),
+        timezone: bundle.base.timezone,
+        slotMinutes: bundle.base.slotMinutes,
+        meetingMinutes: bundle.base.meetingMinutes,
+      });
+      setBlockedSlots(bitsetToSet(bundle.base.unavailable, bundle.base.slotCount));
+      setBaseToken(bundle.baseToken);
+      setParticipantTokens(uniqueParticipantTokens);
+      setParticipants(uniqueParticipants);
+      setParticipantToken("");
+      setFreeSlots(new Set());
+      setMode(uniqueParticipants.length > 0 ? "plan" : "respond");
+      setTokenInput([bundle.baseToken, ...uniqueParticipantTokens].join("\n"));
+      setNotice({
+        kind: "success",
+        message: uniqueParticipants.length > 0
+          ? `Loaded one base and ${uniqueParticipants.length} participant token${uniqueParticipants.length === 1 ? "" : "s"}.`
+          : "Base token restored. Mark your free time without changing the base.",
+      });
+    } catch (error) {
+      const tokenError = error as TokenError;
+      setNotice({ kind: "error", message: tokenError.message || errorMessage(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    const token = routeToken();
+    if (!token) return;
+    setTokenInput(token);
+    void openTokens(token);
+    // Route tokens are consumed only once at startup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const addResponseToPlan = async () => {
+    if (!participantToken || participantTokens.includes(participantToken)) return;
+    const decoded = await decodeParticipantToken(participantToken, baseToken, base);
+    const nextTokens = [...participantTokens, participantToken];
+    setParticipantTokens(nextTokens);
+    setParticipants([...participants, decoded]);
+    setTokenInput([baseToken, ...nextTokens].join("\n"));
+    setMode("plan");
+  };
+
+  const copyText = async (value: string, type: "token" | "url") => {
+    await navigator.clipboard.writeText(value);
+    setCopiedValue(type);
+    window.setTimeout(() => setCopiedValue(null), 1600);
+  };
+
+  const outputToken = mode === "base" ? baseToken : mode === "respond" ? participantToken : "";
+  const privateUrl = outputToken
+    ? `${window.location.origin}${import.meta.env.BASE_URL}#/${outputToken}`
+    : "";
+  const activeSelection = mode === "base" ? blockedSlots : freeSlots;
+  const selectedCount = mode === "base"
+    ? blockedSlots.size
+    : mode === "respond"
+      ? freeSlots.size
+      : scores.filter((score) => score >= 0).length;
+
+  return (
+    <div className="app-shell">
+      <header className="site-header">
+        <a className="brand" href={import.meta.env.BASE_URL}>
+          <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span>
+          <span>TimeMesh</span>
+        </a>
+        <nav aria-label="Primary">
+          <button onClick={() => setSkillOpen(true)} type="button">
+            <Robot aria-hidden="true" size={17} />
+            Agent skill
+          </button>
+          <span className="local-status"><ShieldCheck aria-hidden="true" size={16} weight="fill" /> Local only</span>
+          <button
+            aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+            className="icon-action"
+            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+            type="button"
+          >
+            {theme === "light" ? <Moon aria-hidden="true" size={18} /> : <Sun aria-hidden="true" size={18} />}
+          </button>
+        </nav>
+      </header>
+
+      <main>
+        <section className="hero-workbench">
+          <div className="hero-copy">
+            <span className="hero-kicker">Portable availability protocol</span>
+            <h1>Shared time,<br /><em>encoded.</em></h1>
+            <p>Exchange reversible tokens. Find the overlap. Keep every calendar local.</p>
+          </div>
+          <TokenConsole
+            busy={busy}
+            notice={notice}
+            onChange={setTokenInput}
+            onDecode={() => void openTokens()}
+            value={tokenInput}
+          />
+        </section>
+
+        <section className="workspace" aria-label="Time allocation workspace">
+          <div className="workspace-bar">
+            <div className="mode-switcher" aria-label="Workspace mode" role="tablist">
+              <button aria-selected={mode === "base"} onClick={() => setMode("base")} role="tab" type="button">
+                Base
+              </button>
+              <button aria-selected={mode === "respond"} disabled={!baseToken} onClick={() => setMode("respond")} role="tab" type="button">
+                Availability
+              </button>
+              <button aria-selected={mode === "plan"} disabled={!baseToken} onClick={() => setMode("plan")} role="tab" type="button">
+                Plan <span>{participants.length}</span>
+              </button>
+            </div>
+            <div className="view-controls">
+              <label>
+                <span>Display zone</span>
+                <input
+                  aria-label="Display time zone"
+                  list="display-timezones"
+                  onChange={(event) => setDisplayTimezone(event.target.value)}
+                  value={displayTimezone}
+                />
+                <datalist id="display-timezones">
+                  {[base.timezone, systemTimeZone(), "UTC", "Asia/Shanghai", "Europe/London", "America/New_York"].map(
+                    (zone) => <option key={zone} value={zone} />,
+                  )}
+                </datalist>
+              </label>
+              <button className="view-toggle" onClick={() => setFullDay(!fullDay)} type="button">
+                {fullDay ? <EyeSlash aria-hidden="true" size={16} /> : <Eye aria-hidden="true" size={16} />}
+                {fullDay ? "Focus hours" : "Full day"}
+              </button>
+            </div>
+          </div>
+
+          <div className="workspace-summary">
+            <div>
+              <span>{mode === "base" ? "Mark unavailable" : mode === "respond" ? "Mark when you are free" : "Overlap heatmap"}</span>
+              <strong>{describeBaseRange(base, effectiveDisplayTimezone)}</strong>
+            </div>
+            <dl>
+              <div><dt>Grid</dt><dd>{base.slotMinutes}m</dd></div>
+              <div><dt>{mode === "base" ? "Blocked" : mode === "respond" ? "Free" : "Open"}</dt><dd>{selectedCount}</dd></div>
+              <div><dt>Responses</dt><dd>{participants.length}</dd></div>
+            </dl>
+          </div>
+
+          <div className="workspace-layout">
+            {mode === "plan" ? (
+              <PlannerPanel base={base} candidates={candidates} displayTimezone={effectiveDisplayTimezone} />
+            ) : (
+              <FramePanel
+                frameDisabled={mode !== "base"}
+                onApplyWorkHours={applyWorkHours}
+                onChange={updateSettings}
+                onClear={clearSelection}
+                settings={settings}
+              />
+            )}
+            <div className="calendar-region">
+              <div className="calendar-legend">
+                {mode === "base" ? (
+                  <><span><i className="legend-blocked" /> Unavailable</span><span><i className="legend-open" /> Open</span></>
+                ) : mode === "respond" ? (
+                  <><span><i className="legend-free" /> Your free time</span><span><i className="legend-blocked" /> Organizer unavailable</span></>
+                ) : (
+                  <><span><i className="legend-free" /> More people free</span><span><i className="legend-blocked" /> Organizer unavailable</span></>
+                )}
+                <span className="legend-help">Drag across the grid</span>
+              </div>
+              <CalendarGrid
+                base={base}
+                displayTimezone={effectiveDisplayTimezone}
+                fullDay={fullDay}
+                mode={mode}
+                onSelectedChange={mode === "plan" ? undefined : mode === "base" ? markBaseDirty : (next) => {
+                  setFreeSlots(next);
+                  setParticipantToken("");
+                }}
+                participantCount={participants.length}
+                scores={scores}
+                selected={activeSelection}
+              />
+            </div>
+          </div>
+
+          <div className="output-bar">
+            <div className="output-copy">
+              <BracketsCurly aria-hidden="true" size={21} />
+              <div>
+                <span>{mode === "base" ? "Base token" : mode === "respond" ? "Participant token" : "Planning bundle"}</span>
+                <code>
+                  {mode === "plan"
+                    ? `${BASE_TOKEN_PREFIX}... + ${participants.length} ${PARTICIPANT_TOKEN_PREFIX}...`
+                    : outputToken || "Generate when the allocation is ready"}
+                </code>
+              </div>
+            </div>
+            <div className="output-actions">
+              {mode === "base" ? (
+                <button className="primary-action" onClick={generateBase} type="button">Generate base</button>
+              ) : mode === "respond" ? (
+                <button className="primary-action" disabled={!baseToken || busy} onClick={() => void generateParticipant()} type="button">
+                  Generate response
+                </button>
+              ) : (
+                <button className="secondary-action" onClick={() => void copyText(tokenInput, "token")} type="button">
+                  <Copy aria-hidden="true" size={16} /> Copy bundle
+                </button>
+              )}
+              {outputToken ? (
+                <>
+                  <button className="secondary-action" onClick={() => void copyText(outputToken, "token")} type="button">
+                    {copiedValue === "token" ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
+                    {copiedValue === "token" ? "Copied" : "Copy token"}
+                  </button>
+                  <button className="secondary-action" onClick={() => void copyText(privateUrl, "url")} type="button">
+                    {copiedValue === "url" ? <Check aria-hidden="true" size={16} /> : <ShieldCheck aria-hidden="true" size={16} />}
+                    {copiedValue === "url" ? "Copied" : "Private URL"}
+                  </button>
+                </>
+              ) : null}
+              {mode === "respond" && participantToken ? (
+                <button className="secondary-action" onClick={() => void addResponseToPlan()} type="button">
+                  <UsersThree aria-hidden="true" size={16} /> Add to plan
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </section>
+
+        <section className="protocol-note">
+          <div>
+            <span>One coordinate system</span>
+            <strong>tm1b_</strong>
+            <p>Window, 15-minute grid, time zone and organizer constraints.</p>
+          </div>
+          <div className="protocol-operator">+</div>
+          <div>
+            <span>Independent responses</span>
+            <strong>tm1p_ × n</strong>
+            <p>Base fingerprint and free-time bitmap. No organizer data repeated.</p>
+          </div>
+          <div className="protocol-operator">=</div>
+          <div>
+            <span>Local allocation</span>
+            <strong>Best overlap</strong>
+            <p>Decoded, ranked and displayed entirely inside the browser.</p>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <span>TimeMesh</span>
+        <p>No account. No database. Tokens stay portable.</p>
+        <button onClick={() => setSkillOpen(true)} type="button">Copy the agent skill</button>
+      </footer>
+
+      <SkillDrawer onClose={() => setSkillOpen(false)} open={skillOpen} skillText={agentSkill} />
+    </div>
+  );
+}

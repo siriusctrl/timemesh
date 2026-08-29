@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plan Time with Tokens"
+  short_description: "Generate and verify local-first TimeMesh tokens"
+  default_prompt: "Use $plan-time-with-tokens to turn my availability into a validated TimeMesh token."
