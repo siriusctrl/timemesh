@@ -17,7 +17,7 @@
     "verify:ui": "playwright test",
     "verify:proof": "node scripts/record-proof.mjs",
     "setup:browsers": "playwright install chromium webkit",
-    "skill:check": "python3 /root/.codex/skills/.system/skill-creator/scripts/quick_validate.py skills/plan-time-with-tokens"
+    "skill:check": "node scripts/validate-skill.mjs skills/plan-time-with-tokens"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.3.0",
@@ -37,6 +37,7 @@
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "yaml": "^2.8.1"
   }
 }
