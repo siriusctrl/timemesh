@@ -7,7 +7,7 @@ import {
   encodeBaseToken,
   encodeParticipantToken,
 } from "../src/protocol/codec";
-import { createBaseAllocation, workHoursSlotSet } from "../src/protocol/time";
+import { createBaseAllocation, excludeOrganizerConflicts, workHoursSlotSet } from "../src/protocol/time";
 
 const GOLDEN_BASE = "tm2b_DwA8AcbCwAVADUFzaWEvU2hhbmdoYWkCAxwBnwoB-20Utg";
 const GOLDEN_PARTICIPANT = "tm2p_10VrkaG4nj4CoAEoBCQBzwSx0AjZ";
@@ -117,7 +117,20 @@ describe("TimeMesh Token v2", () => {
     expect(() => workHoursSlotSet(base, "UTC", 20 * 60, 8 * 60)).toThrowError(/ordered range/u);
   });
 
-  test("decodes a whitespace-composed planning bundle", async () => {
+  test("separates participant requests from organizer conflicts", () => {
+    const initial = createBaseAllocation({
+      startDate: "2026-09-01",
+      days: 1,
+      timezone: "UTC",
+    });
+    const base = { ...initial, unavailable: createBitset(initial.slotCount, [2, 3]) };
+    const result = excludeOrganizerConflicts(base, [1, 2, 3, 4]);
+
+    expect(result.free).toEqual(new Set([1, 4]));
+    expect(result.conflicts).toEqual(new Set([2, 3]));
+  });
+
+  test("decodes a whitespace-composed token bundle", async () => {
     const base = createBaseAllocation({
       startDate: "2026-11-01",
       days: 7,

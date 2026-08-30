@@ -68,19 +68,26 @@ try {
   await desktop.goto(`${baseUrl}?participant#/${baseToken}`, { waitUntil: "networkidle" });
   await desktop.getByRole("button", { name: "Mark weekday hours free" }).click();
   await desktop.getByRole("button", { name: "Generate response" }).click();
-  const participantToken = await desktop.locator(".output-copy code").textContent();
+  const firstBundle = await desktop.getByLabel("TimeMesh tokens").inputValue();
+  const participantToken = firstBundle.split(/\s+/u).find((token) => token.startsWith("tm2p_"));
   await desktop.evaluate(() => window.scrollTo(0, 0));
   await capture(desktop, "04-response-ready");
 
-  await desktop.goto(`${baseUrl}?organizer#/${baseToken}/${participantToken}`, { waitUntil: "networkidle" });
-  await capture(desktop, "05-overlap-plan");
+  await desktop.locator(".marked-free").first().click();
+  await desktop.getByRole("button", { name: "Generate response" }).click();
+  const revisedBundle = await desktop.getByLabel("TimeMesh tokens").inputValue();
+  const revisedParticipantToken = revisedBundle.split(/\s+/u).find((token) => token.startsWith("tm2p_"));
+  await desktop.getByLabel("TimeMesh tokens").fill(`${baseToken}\n${participantToken}\n${revisedParticipantToken}`);
+  await desktop.getByRole("button", { name: "Open tokens" }).click();
+  await desktop.getByText("Best shared time").waitFor();
+  await capture(desktop, "05-response-comparison");
 
   await desktop.getByLabel("Switch to dark mode").click();
   await desktop.waitForTimeout(430);
   await capture(desktop, "06-theme-reveal", false);
   await desktop.waitForFunction(() => !document.documentElement.dataset.themeTransition);
   await desktop.evaluate(() => window.scrollTo(0, 0));
-  await capture(desktop, "07-dark-plan");
+  await capture(desktop, "07-dark-comparison");
 
   const mobile = await browser.newPage({
     viewport: { width: 393, height: 852 },

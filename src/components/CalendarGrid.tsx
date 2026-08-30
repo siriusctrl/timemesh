@@ -3,12 +3,11 @@ import { alignSlotDays } from "../calendar/alignDays";
 import { getBit } from "../protocol/bits";
 import { groupSlotsByDay } from "../protocol/time";
 import type { BaseAllocation } from "../protocol/types";
-
-export type CalendarMode = "base" | "respond" | "plan";
+import type { WorkspaceKind } from "../workspace";
 
 type CalendarGridProps = {
   base: BaseAllocation;
-  mode: CalendarMode;
+  workspace: WorkspaceKind;
   selected: Set<number>;
   onSelectedChange?: (next: Set<number>) => void;
   scores?: number[];
@@ -19,7 +18,7 @@ type CalendarGridProps = {
 
 export function CalendarGrid({
   base,
-  mode,
+  workspace,
   selected,
   onSelectedChange,
   scores = [],
@@ -46,8 +45,8 @@ export function CalendarGrid({
   );
   const firstEditableSlot = useMemo(() => aligned.days
     .flatMap((day) => day.slots)
-    .find((slot) => slot && (mode !== "respond" || !getBit(base.unavailable, slot.index)))?.index ?? -1,
-  [aligned.days, base.unavailable, mode]);
+    .find((slot) => slot && (workspace !== "response" || !getBit(base.unavailable, slot.index)))?.index ?? -1,
+  [aligned.days, base.unavailable, workspace]);
   const [focusedSlot, setFocusedSlot] = useState(firstEditableSlot);
   const slotButtons = useRef(new Map<number, HTMLButtonElement>());
 
@@ -66,8 +65,8 @@ export function CalendarGrid({
   }, []);
 
   const setSlot = (index: number, value: boolean) => {
-    if (!onSelectedChange || mode === "plan") return;
-    if (mode === "respond" && getBit(base.unavailable, index)) return;
+    if (!onSelectedChange || workspace === "comparison") return;
+    if (workspace === "response" && getBit(base.unavailable, index)) return;
     const next = new Set(selected);
     if (value) next.add(index);
     else next.delete(index);
@@ -75,7 +74,7 @@ export function CalendarGrid({
   };
 
   const beginDrag = (index: number) => {
-    if (mode === "plan" || (mode === "respond" && getBit(base.unavailable, index))) return;
+    if (workspace === "comparison" || (workspace === "response" && getBit(base.unavailable, index))) return;
     dragValue.current = !selected.has(index);
     dragging.current = true;
     setSlot(index, dragValue.current);
@@ -83,8 +82,8 @@ export function CalendarGrid({
 
   const statusForSlot = (index: number): string => {
     if (getBit(base.unavailable, index)) return "Organizer unavailable";
-    if (mode === "base") return selected.has(index) ? "Unavailable" : "Available";
-    if (mode === "respond") return selected.has(index) ? "Free" : "Not selected";
+    if (workspace === "organizer") return selected.has(index) ? "Unavailable" : "Available";
+    if (workspace === "response") return selected.has(index) ? "Free" : "Not selected";
     const score = scores[index] ?? 0;
     return participantCount === 0
       ? "Organizer available"
@@ -96,7 +95,7 @@ export function CalendarGrid({
     let nextRow = rowIndex + rowStep;
     while (nextDay >= 0 && nextDay < aligned.days.length && nextRow >= 0 && nextRow < aligned.rows.length) {
       const slot = aligned.days[nextDay]?.slots[nextRow];
-      if (slot && (mode !== "respond" || !getBit(base.unavailable, slot.index))) {
+      if (slot && (workspace !== "response" || !getBit(base.unavailable, slot.index))) {
         setFocusedSlot(slot.index);
         slotButtons.current.get(slot.index)?.focus();
         return;
@@ -132,17 +131,17 @@ export function CalendarGrid({
               {day.slots.map((slot, rowIndex) => {
                 if (!slot) return <span aria-hidden="true" className="time-slot time-slot-empty" key={`empty-${rowIndex}`} />;
                 const hostBlocked = getBit(base.unavailable, slot.index);
-                const active = mode === "base" ? selected.has(slot.index) : mode === "respond" && selected.has(slot.index);
+                const active = workspace === "organizer" ? selected.has(slot.index) : workspace === "response" && selected.has(slot.index);
                 const score = scores[slot.index] ?? 0;
                 const ratio = participantCount > 0 ? score / participantCount : 0;
                 const classNames = [
                   "time-slot",
                   slot.minute === 0 ? "hour-start" : "",
                   hostBlocked ? "host-blocked" : "",
-                  active ? (mode === "base" ? "marked-unavailable" : "marked-free") : "",
-                  mode === "plan" && !hostBlocked ? "heat-slot" : "",
+                  active ? (workspace === "organizer" ? "marked-unavailable" : "marked-free") : "",
+                  workspace === "comparison" && !hostBlocked ? "heat-slot" : "",
                 ].filter(Boolean).join(" ");
-                if (mode === "plan") {
+                if (workspace === "comparison") {
                   return <span aria-label={`${day.weekdayLabel} ${day.dateLabel} ${slot.timeLabel}: ${statusForSlot(slot.index)}`} className={classNames} key={slot.index} role="img" />;
                 }
                 return (
@@ -150,7 +149,7 @@ export function CalendarGrid({
                     aria-label={`${day.weekdayLabel} ${day.dateLabel} ${slot.timeLabel}: ${statusForSlot(slot.index)}`}
                     className={classNames}
                     data-slot-index={slot.index}
-                    disabled={mode === "respond" && hostBlocked}
+                    disabled={workspace === "response" && hostBlocked}
                     key={slot.index}
                     onFocus={() => setFocusedSlot(slot.index)}
                     onKeyDown={(event) => {

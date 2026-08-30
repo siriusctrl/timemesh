@@ -442,7 +442,10 @@ main {
 
 .workspace-summary,
 .output-bar {
+  position: relative;
+  z-index: 6;
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
 }
@@ -616,7 +619,7 @@ main {
 }
 
 .frame-panel,
-.planner-panel {
+.comparison-panel {
   padding: 14px;
   border-right: 1px solid var(--line);
   background: var(--surface-raised);
@@ -1297,7 +1300,7 @@ main {
   }
 
   .frame-panel,
-  .planner-panel {
+  .comparison-panel {
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
@@ -1342,19 +1345,11 @@ main {
     flex-direction: column;
   }
 
-  .app-shell-base .workspace,
-  .app-shell-plan .workspace {
-    height: max(650px, calc(100dvh - 173px));
+  .app-shell-organizer .workspace,
+  .app-shell-comparison .workspace,
+  .app-shell-response .workspace {
+    height: max(540px, calc(100dvh - 173px));
     margin-bottom: 14px;
-  }
-
-  .app-shell-respond main {
-    padding: 14px 0;
-  }
-
-  .app-shell-respond .workspace {
-    height: calc(100dvh - 88px);
-    margin-bottom: 0;
   }
 
   .workspace-layout {

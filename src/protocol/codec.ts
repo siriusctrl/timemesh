@@ -236,7 +236,7 @@ export async function decodeTokenBundle(input: string): Promise<TokenBundle> {
     throw new TokenError("missing_base", "Paste one base token before participant tokens.");
   }
   if (baseTokens.length > 1) {
-    throw new TokenError("invalid_contract", "A planning bundle may contain exactly one base token.");
+    throw new TokenError("invalid_contract", "A token bundle may contain exactly one base token.");
   }
   const baseToken = baseTokens[0];
   const base = decodeBaseToken(baseToken);

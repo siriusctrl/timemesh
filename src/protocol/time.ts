@@ -1,5 +1,5 @@
 import { Temporal } from "@js-temporal/polyfill";
-import { createBitset } from "./bits";
+import { createBitset, getBit } from "./bits";
 import {
   DEFAULT_SLOT_MINUTES,
   MAX_WINDOW_DAYS,
@@ -188,6 +188,19 @@ export function rangesToSlotSet(
     if (selected) result.add(index);
   }
   return result;
+}
+
+export function excludeOrganizerConflicts(
+  base: BaseAllocation,
+  requestedFree: Iterable<number>,
+): { free: Set<number>; conflicts: Set<number> } {
+  const free = new Set<number>();
+  const conflicts = new Set<number>();
+  for (const index of requestedFree) {
+    if (getBit(base.unavailable, index)) conflicts.add(index);
+    else free.add(index);
+  }
+  return { free, conflicts };
 }
 
 export function workHoursSlotSet(

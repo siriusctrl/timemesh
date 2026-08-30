@@ -1,15 +1,15 @@
 import { BracketsCurly, Check, Copy, LinkSimple } from "@phosphor-icons/react";
-import type { CalendarMode } from "./CalendarGrid";
 import { BASE_TOKEN_PREFIX, PARTICIPANT_TOKEN_PREFIX } from "../protocol/types";
+import type { WorkspaceKind } from "../workspace";
 
-type CopiedValue = "token" | "url" | null;
+type CopiedValue = "token" | "bundle" | "url" | null;
 
 type OutputBarProps = {
   baseToken: string;
   busy: boolean;
   copiedValue: CopiedValue;
   error?: string;
-  mode: CalendarMode;
+  workspace: WorkspaceKind;
   onCopy: (value: string, type: Exclude<CopiedValue, null>) => void;
   onGenerateBase: () => void;
   onCreateResponse: () => void;
@@ -24,7 +24,7 @@ export function OutputBar({
   busy,
   copiedValue,
   error,
-  mode,
+  workspace,
   onCopy,
   onGenerateBase,
   onCreateResponse,
@@ -33,45 +33,62 @@ export function OutputBar({
   shareUrl,
   tokenBundle,
 }: OutputBarProps) {
-  const outputToken = mode === "base" ? baseToken : mode === "respond" ? participantToken : "";
+  const responseReady = workspace === "response" && Boolean(participantToken);
 
   return (
     <div className="output-bar">
       <div className="output-copy">
         <BracketsCurly aria-hidden="true" size={21} />
         <div>
-          <span>{mode === "base" ? "Meeting token" : mode === "respond" ? "Your response" : "Responses being compared"}</span>
+          <span>{workspace === "organizer" ? "Meeting token" : workspace === "response" ? "Response bundle" : "Responses being compared"}</span>
           <code>
-            {mode === "plan"
+            {workspace === "comparison"
               ? `${BASE_TOKEN_PREFIX}... + ${participantCount} ${PARTICIPANT_TOKEN_PREFIX}...`
-              : outputToken || "Generate when the allocation is ready"}
+              : responseReady
+                ? `${BASE_TOKEN_PREFIX}... + ${PARTICIPANT_TOKEN_PREFIX}...`
+                : baseToken || "Generate when the allocation is ready"}
           </code>
-          {mode === "respond" && participantToken ? (
-            <small role="status">Copy the URL and send it back to the organizer.</small>
-          ) : mode === "respond" && error ? (
+          {responseReady ? (
+            <small role="status">The bundle keeps this response attached to its meeting.</small>
+          ) : workspace === "response" && error ? (
             <small className="output-error" role="status">{error}</small>
           ) : null}
         </div>
       </div>
       <div className="output-actions">
-        {mode === "base" ? (
+        {workspace === "organizer" ? (
           !baseToken
             ? <button className="primary-action" onClick={onGenerateBase} type="button">Generate token</button>
             : null
-        ) : mode === "respond" ? (
-          <button className="primary-action" disabled={!baseToken || busy} onClick={onCreateResponse} type="button">
-            Generate response
-          </button>
+        ) : workspace === "response" ? (
+          !participantToken
+            ? <button className="primary-action" disabled={!baseToken || busy} onClick={onCreateResponse} type="button">
+                Generate response
+              </button>
+            : null
         ) : (
-          <button className="secondary-action" onClick={() => onCopy(tokenBundle, "token")} type="button">
-            <Copy aria-hidden="true" size={16} /> Copy bundle
+          <button className="secondary-action" onClick={() => onCopy(tokenBundle, "bundle")} type="button">
+            {copiedValue === "bundle" ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
+            {copiedValue === "bundle" ? "Copied" : "Copy bundle"}
           </button>
         )}
-        {outputToken ? (
+        {workspace === "organizer" && baseToken ? (
           <>
-            <button className="secondary-action" onClick={() => onCopy(outputToken, "token")} type="button">
+            <button className="secondary-action" onClick={() => onCopy(baseToken, "token")} type="button">
               {copiedValue === "token" ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
               {copiedValue === "token" ? "Copied" : "Copy token"}
+            </button>
+            <button className="secondary-action" onClick={() => onCopy(shareUrl, "url")} type="button">
+              {copiedValue === "url" ? <Check aria-hidden="true" size={16} /> : <LinkSimple aria-hidden="true" size={16} />}
+              {copiedValue === "url" ? "Copied" : "Copy URL"}
+            </button>
+          </>
+        ) : null}
+        {responseReady ? (
+          <>
+            <button className="secondary-action" onClick={() => onCopy(tokenBundle, "bundle")} type="button">
+              {copiedValue === "bundle" ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
+              {copiedValue === "bundle" ? "Copied" : "Copy bundle"}
             </button>
             <button className="secondary-action" onClick={() => onCopy(shareUrl, "url")} type="button">
               {copiedValue === "url" ? <Check aria-hidden="true" size={16} /> : <LinkSimple aria-hidden="true" size={16} />}

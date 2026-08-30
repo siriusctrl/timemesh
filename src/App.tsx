@@ -2,10 +2,10 @@ import { Eye, EyeSlash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useState } from "react";
 import agentSkill from "../skills/plan-time-with-tokens/SKILL.md?raw";
 import { AppHeader } from "./components/AppHeader";
-import { CalendarGrid, type CalendarMode } from "./components/CalendarGrid";
+import { CalendarGrid } from "./components/CalendarGrid";
+import { ComparisonPanel } from "./components/ComparisonPanel";
 import { FramePanel, type FrameSettings } from "./components/FramePanel";
 import { OutputBar } from "./components/OutputBar";
-import { PlannerPanel } from "./components/PlannerPanel";
 import { SkillDrawer } from "./components/SkillDrawer";
 import { TimeZoneSelect } from "./components/TimeZoneSelect";
 import { TokenConsole } from "./components/TokenConsole";
@@ -34,6 +34,7 @@ import {
   type ParticipantAllocation,
 } from "./protocol/types";
 import { useTheme } from "./useTheme";
+import { type WorkspaceKind, workspaceForImportedResponses } from "./workspace";
 
 type Notice = { kind: "success" | "error" | "info"; message: string };
 
@@ -73,7 +74,7 @@ function safeTimeZone(candidate: string, fallback: string): string {
 export default function App() {
   const initial = useMemo(createInitialState, []);
   const { followsSystem, theme, toggleTheme } = useTheme();
-  const [mode, setMode] = useState<CalendarMode>("base");
+  const [workspace, setWorkspace] = useState<WorkspaceKind>("organizer");
   const [settings, setSettings] = useState<FrameSettings>(initial.settings);
   const [base, setBase] = useState<BaseAllocation>(initial.base);
   const [freeSlots, setFreeSlots] = useState<Set<number>>(new Set());
@@ -86,15 +87,15 @@ export default function App() {
   const [displayTimezone, setDisplayTimezone] = useState(systemTimeZone);
   const [fullDay, setFullDay] = useState(true);
   const [skillOpen, setSkillOpen] = useState(false);
-  const [copiedValue, setCopiedValue] = useState<"token" | "url" | null>(null);
+  const [copiedValue, setCopiedValue] = useState<"token" | "bundle" | "url" | null>(null);
 
   const scores = useMemo(
     () => availabilityScores(base, participants),
     [base, participants],
   );
   const candidates = useMemo(
-    () => mode === "plan" ? findCandidateWindows(base, participants) : [],
-    [base, mode, participants],
+    () => workspace === "comparison" ? findCandidateWindows(base, participants) : [],
+    [base, participants, workspace],
   );
   const effectiveDisplayTimezone = useMemo(
     () => safeTimeZone(displayTimezone, base.timezone),
@@ -110,7 +111,18 @@ export default function App() {
       setBaseToken("");
       setParticipantToken("");
       setParticipants([]);
-      setNotice({ kind: "info", message: "Organizer availability changed. Create a new meeting link before collecting responses." });
+      setTokenInput("");
+      setNotice({ kind: "info", message: "Organizer availability changed. Generate a new meeting token before collecting responses." });
+    }
+  };
+
+  const markResponseDirty = (nextFree: Set<number>) => {
+    setFreeSlots(nextFree);
+    if (participantToken) {
+      setParticipantToken("");
+      setParticipants([]);
+      setTokenInput(baseToken);
+      setNotice({ kind: "info", message: "Response changed. Generate a new response bundle." });
     }
   };
 
@@ -127,6 +139,7 @@ export default function App() {
       setBaseToken("");
       setParticipantToken("");
       setParticipants([]);
+      setTokenInput("");
       setNotice(null);
     } catch (error) {
       setNotice({ kind: "error", message: errorMessage(error) });
@@ -136,33 +149,29 @@ export default function App() {
   const applyWorkHours = (startMinute: number, endMinute: number) => {
     const workHours = workHoursSlotSet(
       base,
-      mode === "respond" ? effectiveDisplayTimezone : base.timezone,
+      workspace === "response" ? effectiveDisplayTimezone : base.timezone,
       startMinute,
       endMinute,
       true,
     );
-    if (mode === "base") {
+    if (workspace === "organizer") {
       const unavailable = new Set<number>();
       for (let index = 0; index < base.slotCount; index += 1) {
         if (!workHours.has(index)) unavailable.add(index);
       }
       markBaseDirty(unavailable);
-    } else if (mode === "respond") {
+    } else if (workspace === "response") {
       const available = new Set<number>();
       for (const index of workHours) {
         if (!getBit(base.unavailable, index)) available.add(index);
       }
-      setFreeSlots(available);
-      setParticipantToken("");
+      markResponseDirty(available);
     }
   };
 
   const clearSelection = () => {
-    if (mode === "base") markBaseDirty(new Set());
-    else {
-      setFreeSlots(new Set());
-      setParticipantToken("");
-    }
+    if (workspace === "organizer") markBaseDirty(new Set());
+    else if (workspace === "response") markResponseDirty(new Set());
   };
 
   const generateBase = () => {
@@ -182,10 +191,11 @@ export default function App() {
     setBusy(true);
     try {
       const token = await encodeParticipantToken(baseToken, base, freeSlots);
-      await decodeParticipantToken(token, baseToken, base);
+      const decoded = await decodeParticipantToken(token, baseToken, base);
       setParticipantToken(token);
+      setParticipants([decoded]);
       setTokenInput(`${baseToken}\n${token}`);
-      setNotice({ kind: "success", message: "Response ready. Copy the URL and send it back to the organizer." });
+      setNotice({ kind: "success", message: "Response bundle ready. Copy the bundle or URL and send it back to the organizer." });
     } catch (error) {
       setNotice({ kind: "error", message: errorMessage(error) });
     } finally {
@@ -209,16 +219,21 @@ export default function App() {
         meetingMinutes: bundle.base.meetingMinutes,
       });
       setBaseToken(bundle.baseToken);
+      const nextWorkspace = workspaceForImportedResponses(bundle.participants.length);
       setParticipants(bundle.participants);
-      setParticipantToken("");
-      setFreeSlots(new Set());
-      setMode(bundle.participants.length > 0 ? "plan" : "respond");
+      setParticipantToken(bundle.participantTokens.length === 1 ? bundle.participantTokens[0] : "");
+      setFreeSlots(bundle.participants.length === 1
+        ? bitsetToSet(bundle.participants[0].free, bundle.base.slotCount)
+        : new Set());
+      setWorkspace(nextWorkspace);
       setTokenInput([bundle.baseToken, ...bundle.participantTokens].join("\n"));
       setNotice({
         kind: "success",
-        message: bundle.participants.length > 0
-          ? `Loaded ${bundle.participants.length} response${bundle.participants.length === 1 ? "" : "s"} for comparison.`
-          : "Meeting opened. Mark every time that works for you.",
+        message: bundle.participants.length > 1
+          ? `Loaded ${bundle.participants.length} responses for comparison.`
+          : bundle.participants.length === 1
+            ? "Response loaded. Review it here or edit it and generate a new bundle."
+            : "Meeting opened. Mark every time that works for you.",
       });
     } catch (error) {
       setNotice({ kind: "error", message: errorMessage(error) });
@@ -236,15 +251,15 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const copyText = async (value: string, type: "token" | "url") => {
+  const copyText = async (value: string, type: "token" | "bundle" | "url") => {
     await navigator.clipboard.writeText(value);
     setCopiedValue(type);
     window.setTimeout(() => setCopiedValue(null), 1600);
   };
 
-  const urlTokenBundle = mode === "respond" && participantToken
+  const urlTokenBundle = workspace === "response" && participantToken
     ? `${baseToken}/${participantToken}`
-    : mode === "base" ? baseToken : "";
+    : workspace === "organizer" ? baseToken : "";
   const shareUrl = urlTokenBundle
     ? `${window.location.origin}${import.meta.env.BASE_URL}#/${urlTokenBundle}`
     : "";
@@ -252,9 +267,9 @@ export default function App() {
     () => bitsetToSet(base.unavailable, base.slotCount),
     [base],
   );
-  const activeSelection = mode === "base" ? blockedSlots : freeSlots;
+  const activeSelection = workspace === "organizer" ? blockedSlots : freeSlots;
   return (
-    <div className={`app-shell app-shell-${mode}`}>
+    <div className={`app-shell app-shell-${workspace}`}>
       <AppHeader
         followsSystem={followsSystem}
         onOpenSkill={() => setSkillOpen(true)}
@@ -263,17 +278,15 @@ export default function App() {
       />
 
       <main id="schedule-workspace">
-        {mode !== "respond" ? (
-          <section className="command-strip">
-            <TokenConsole
-              busy={busy}
-              notice={notice}
-              onChange={setTokenInput}
-              onDecode={() => void openTokens()}
-              value={tokenInput}
-            />
-          </section>
-        ) : null}
+        <section className="command-strip">
+          <TokenConsole
+            busy={busy}
+            notice={notice}
+            onChange={setTokenInput}
+            onDecode={() => void openTokens()}
+            value={tokenInput}
+          />
+        </section>
 
         <section className="workspace" aria-label="Time allocation workspace">
           <div className="workspace-summary">
@@ -294,38 +307,35 @@ export default function App() {
           </div>
 
           <div className="workspace-layout">
-            {mode === "plan" ? (
-              <PlannerPanel base={base} candidates={candidates} displayTimezone={effectiveDisplayTimezone} />
+            {workspace === "comparison" ? (
+              <ComparisonPanel base={base} candidates={candidates} displayTimezone={effectiveDisplayTimezone} />
             ) : (
               <FramePanel
-                frameDisabled={mode !== "base"}
+                frameDisabled={workspace !== "organizer"}
                 onApplyWorkHours={applyWorkHours}
                 onChange={updateSettings}
                 onClear={clearSelection}
-                participantView={mode === "respond"}
+                participantView={workspace === "response"}
                 settings={settings}
               />
             )}
             <div className="calendar-region">
               <div className="calendar-legend">
-                {mode === "base" ? (
+                {workspace === "organizer" ? (
                   <><span><i className="legend-blocked" /> Unavailable</span><span><i className="legend-open" /> Open</span></>
-                ) : mode === "respond" ? (
+                ) : workspace === "response" ? (
                   <><span><i className="legend-free" /> Your free time</span><span><i className="legend-blocked" /> Organizer unavailable</span></>
                 ) : (
                   <><span><i className="legend-free" /> More people free</span><span><i className="legend-blocked" /> Organizer unavailable</span></>
                 )}
-                <span className="legend-help">{mode === "plan" ? "Read the overlap grid" : "Drag or use arrow keys"}</span>
+                <span className="legend-help">{workspace === "comparison" ? "Read the overlap grid" : "Drag or use arrow keys"}</span>
               </div>
               <CalendarGrid
                 base={base}
                 displayTimezone={effectiveDisplayTimezone}
                 fullDay={fullDay}
-                mode={mode}
-                onSelectedChange={mode === "plan" ? undefined : mode === "base" ? markBaseDirty : (next) => {
-                  setFreeSlots(next);
-                  setParticipantToken("");
-                }}
+                workspace={workspace}
+                onSelectedChange={workspace === "comparison" ? undefined : workspace === "organizer" ? markBaseDirty : markResponseDirty}
                 participantCount={participants.length}
                 scores={scores}
                 selected={activeSelection}
@@ -338,7 +348,7 @@ export default function App() {
             busy={busy}
             copiedValue={copiedValue}
             error={notice?.kind === "error" ? notice.message : undefined}
-            mode={mode}
+            workspace={workspace}
             onCopy={(value, type) => void copyText(value, type)}
             onGenerateBase={generateBase}
             onCreateResponse={() => void generateParticipant()}

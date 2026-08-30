@@ -108,7 +108,7 @@ A daylight-saving transition can produce a 23- or 25-hour local day. Never recon
 
 ## 8. Composition and privacy
 
-A planning bundle is whitespace-separated transport text, not another Token v2 payload:
+A token bundle is whitespace-separated transport text, not another Token v2 payload:
 
 ```text
 tm2b_...

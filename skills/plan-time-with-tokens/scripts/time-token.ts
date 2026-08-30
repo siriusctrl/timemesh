@@ -14,6 +14,7 @@ import {
   baseWindowDays,
   createBaseAllocation,
   describeBaseRange,
+  excludeOrganizerConflicts,
   rangesToSlotSet,
   slotInstant,
 } from "../../../src/protocol/time";
@@ -135,7 +136,8 @@ try {
     const baseToken = required(args, "base");
     const base = decodeBaseToken(baseToken);
     const ranges = await readRanges(required(args, "free-json"));
-    const free = rangesToSlotSet(base, ranges, "free");
+    const requestedFree = rangesToSlotSet(base, ranges, "free");
+    const { free, conflicts } = excludeOrganizerConflicts(base, requestedFree);
     const token = await encodeParticipantToken(baseToken, base, free);
     const decoded = await decodeParticipantToken(token, baseToken, base);
     console.log(token);
@@ -145,8 +147,11 @@ try {
       range: describeBaseRange(base),
       timezone: base.timezone,
       slotMinutes: base.slotMinutes,
+      requestedFreeSlotCount: requestedFree.size,
       freeSlotCount: countBits(decoded.free, base.slotCount),
       freeRanges: selectedRanges(base, decoded.free),
+      organizerConflictSlotCount: conflicts.size,
+      organizerConflictRanges: selectedRanges(base, createBitset(base.slotCount, conflicts)),
     }, null, 2));
   } else if (command === "validate" || command === "decode") {
     if (!tokenArgument) usage();

@@ -3,15 +3,15 @@ import type { CandidateWindow } from "../protocol/planner";
 import { formatInstant, slotEpochMinutes } from "../protocol/time";
 import type { BaseAllocation } from "../protocol/types";
 
-type PlannerPanelProps = {
+type ComparisonPanelProps = {
   base: BaseAllocation;
   candidates: CandidateWindow[];
   displayTimezone: string;
 };
 
-export function PlannerPanel({ base, candidates, displayTimezone }: PlannerPanelProps) {
+export function ComparisonPanel({ base, candidates, displayTimezone }: ComparisonPanelProps) {
   return (
-    <aside className="planner-panel">
+    <aside className="comparison-panel">
       <div className="panel-heading">
         <div>
           <span>Ranked windows</span>

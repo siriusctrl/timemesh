@@ -36,7 +36,7 @@ test("moves from organizer link to participant response and comparison", async (
   await page.reload();
   await expect(page.getByRole("heading", { name: "Share when you are free" })).toBeVisible();
   await expect(page.getByRole("tablist")).toHaveCount(0);
-  await expect(page.getByLabel("TimeMesh tokens")).toHaveCount(0);
+  await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(baseToken!);
   await expect(page.getByRole("button", { name: "Add to plan" })).toHaveCount(0);
   await expect(page.getByText("Copy the agent skill")).toHaveCount(0);
   await expect(page.locator(".workspace-summary").getByRole("combobox", { name: "Display time zone" })).toBeVisible();
@@ -60,19 +60,41 @@ test("moves from organizer link to participant response and comparison", async (
 
   await page.getByRole("button", { name: "Mark weekday hours free" }).click();
   await page.getByRole("button", { name: "Generate response" }).click();
-  await expect(outputCode).toContainText("tm2p_");
-  const participantToken = await outputCode.textContent();
+  await expect(page.getByText("Response bundle", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Generate response" })).toHaveCount(0);
+  const generatedBundle = await page.getByLabel("TimeMesh tokens").inputValue();
+  const participantToken = generatedBundle.split(/\s+/u).find((token) => token.startsWith("tm2p_"));
   expect(participantToken).toMatch(/^tm2p_/u);
-  await expect(page.getByText("Copy the URL and send it back to the organizer.")).toBeVisible();
+  await expect(page.getByText("The bundle keeps this response attached to its meeting.")).toBeVisible();
+  await page.getByRole("button", { name: "Copy bundle" }).click();
+  const copiedBundle = await page.evaluate(() => window.sessionStorage.getItem("timemesh-test-clipboard"));
+  expect(copiedBundle).toBe(`${baseToken}\n${participantToken}`);
   await page.getByRole("button", { name: "Copy URL" }).click();
   const responseUrl = await page.evaluate(() => window.sessionStorage.getItem("timemesh-test-clipboard"));
   expect(responseUrl).toContain(`#/${baseToken}/${participantToken}`);
 
   await page.goto(responseUrl!);
   await page.reload();
-  await expect(page.getByText("Best shared time")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Share when you are free" })).toBeVisible();
+  await expect(page.getByText("Best shared time")).toHaveCount(0);
+  await expect(page.locator(".marked-free").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Generate response" })).toHaveCount(0);
   await expect(page.getByRole("tablist")).toHaveCount(0);
   await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(/tm2b_[A-Za-z0-9_-]+\ntm2p_[A-Za-z0-9_-]+/u);
+
+  await page.locator(".marked-free").first().click();
+  await expect(page.getByRole("button", { name: "Generate response" })).toBeVisible();
+  await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(baseToken!);
+  await page.getByRole("button", { name: "Generate response" }).click();
+  const revisedBundle = await page.getByLabel("TimeMesh tokens").inputValue();
+  const revisedParticipantToken = revisedBundle.split(/\s+/u).find((token) => token.startsWith("tm2p_"));
+  expect(revisedParticipantToken).toMatch(/^tm2p_/u);
+  expect(revisedParticipantToken).not.toBe(participantToken);
+
+  await page.getByLabel("TimeMesh tokens").fill(`${baseToken}\n${participantToken}\n${revisedParticipantToken}`);
+  await page.getByRole("button", { name: "Open tokens" }).click();
+  await expect(page.getByText("Best shared time")).toBeVisible();
+  await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(/tm2b_[A-Za-z0-9_-]+\ntm2p_[A-Za-z0-9_-]+\ntm2p_[A-Za-z0-9_-]+/u);
 });
 
 test("restores a generated base through the token console", async ({ page }) => {
@@ -85,7 +107,30 @@ test("restores a generated base through the token console", async ({ page }) => 
   await page.getByRole("button", { name: "Open tokens" }).click();
   await expect(page.getByRole("heading", { name: "Share when you are free" })).toBeVisible();
   await expect(page.getByRole("tablist")).toHaveCount(0);
-  await expect(page.getByLabel("TimeMesh tokens")).toHaveCount(0);
+  await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(token!);
+});
+
+test("accepts a participant token on an already opened meeting", async ({ page }) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "Generate token" }).click();
+  const outputCode = page.locator(".output-copy code");
+  await expect(outputCode).toContainText("tm2b_");
+  const baseToken = await outputCode.textContent();
+
+  await page.goto(`./#/${baseToken}`);
+  await page.reload();
+  await page.getByRole("button", { name: "Generate response" }).click();
+  const responseBundle = await page.getByLabel("TimeMesh tokens").inputValue();
+  const participantToken = responseBundle.split(/\s+/u).find((token) => token.startsWith("tm2p_"));
+  expect(participantToken).toMatch(/^tm2p_/u);
+
+  await page.goto(`./#/${baseToken}`);
+  await page.reload();
+  await page.getByLabel("TimeMesh tokens").fill(participantToken!);
+  await page.getByRole("button", { name: "Open tokens" }).click();
+  await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(`${baseToken}\n${participantToken}`);
+  await expect(page.getByText("Response loaded. Review it here or edit it and generate a new bundle.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Generate response" })).toHaveCount(0);
 });
 
 test("opens a base token from a pretty path route", async ({ page }) => {
@@ -96,7 +141,7 @@ test("opens a base token from a pretty path route", async ({ page }) => {
 
   await page.goto(`./t/${token}`);
   await expect(page.getByRole("heading", { name: "Share when you are free" })).toBeVisible();
-  await expect(page.getByLabel("TimeMesh tokens")).toHaveCount(0);
+  await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(token!);
 });
 
 test("opens the agent skill and switches appearance", async ({ page }) => {

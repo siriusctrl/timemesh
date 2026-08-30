@@ -13,6 +13,7 @@ This file is the operating map for agents working in this repository. Keep produ
 - `src/timezones/catalog.ts`: canonical IANA options, major-city aliases, and search ranking.
 - `src/calendar/alignDays.ts`: shared wall-clock rows for partial and DST display days.
 - `src/components/CalendarGrid.tsx`: drag and keyboard allocation editor plus overlap heatmap.
+- `src/components/ComparisonPanel.tsx`: ranked shared windows for multi-response bundles.
 - `src/useTheme.ts` and `src/themeReveal.ts`: system-aware theme state and manual radial reveal.
 - `src/App.tsx`: browser-local workflow state and token composition.
 - `skills/plan-time-with-tokens/`: reusable agent workflow, deterministic CLI, and Token v2 reference.
@@ -30,7 +31,7 @@ This file is the operating map for agents working in this repository. Keep produ
 - Store the frame as UTC epoch minutes plus slot count. Keep an IANA time zone for calendar boundaries and display. Never use a fixed UTC offset as time-zone identity.
 - Keep participant tokens dependent on their exact base token. A base edit invalidates collected participant tokens by design.
 - Never make a language model reproduce binary encoding manually. Agents create explicit time ranges and call the project CLI, then decode the result for round-trip verification.
-- Keep imported tokens, selections, and planning results in browser memory. Theme preference is the only local-storage value.
+- Keep imported tokens, selections, and comparison results in browser memory. Theme preference is the only local-storage value.
 - Keep the app statically buildable under `/timemesh/` with no runtime network dependency.
 - Treat `/t/<token>` as a convenience route that exposes its path to the host. **Copy URL** generates `#/<base-token>` for a meeting and `#/<base-token>/<participant-token>` for a response; fragments are request-private, not secret.
 - Planner code consumes decoded protocol objects. UI components must not parse token bytes directly.
