@@ -13,13 +13,18 @@ test("moves from organizer link to participant response and comparison", async (
   await expect(page.getByRole("heading", { name: /Shared time/ })).toBeVisible();
   await expect(page.getByTestId("calendar-grid")).toBeVisible();
   await expect(page.getByLabel("Grid")).toHaveValue("15");
-  await expect(page.getByRole("heading", { name: "Define the meeting window" })).toBeVisible();
+  await expect(page.getByLabel("Starts")).toBeVisible();
   await expect(page.getByRole("tablist")).toHaveCount(0);
 
   await expect(page.getByLabel("Weekday hours start")).toHaveValue("08:00");
   await expect(page.getByLabel("Weekday hours end")).toHaveValue("20:00");
   await page.getByRole("button", { name: "Keep weekday hours" }).click();
-  await page.getByRole("button", { name: "Create meeting link" }).click();
+  await page.getByRole("button", { name: "Generate token" }).click();
+  await expect(page.getByText("Meeting token", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Generate token" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Copy bundle" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Copy token" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy URL" })).toBeVisible();
   const outputCode = page.locator(".output-copy code");
   const baseToken = await outputCode.textContent();
   expect(baseToken).toMatch(/^tm2b_/u);
@@ -72,7 +77,7 @@ test("moves from organizer link to participant response and comparison", async (
 
 test("restores a generated base through the token console", async ({ page }) => {
   await page.goto("./");
-  await page.getByRole("button", { name: "Create meeting link" }).click();
+  await page.getByRole("button", { name: "Generate token" }).click();
   const token = await page.locator(".output-copy code").textContent();
   expect(token).toMatch(/^tm2b_/u);
 
@@ -85,7 +90,7 @@ test("restores a generated base through the token console", async ({ page }) => 
 
 test("opens a base token from a pretty path route", async ({ page }) => {
   await page.goto("./");
-  await page.getByRole("button", { name: "Create meeting link" }).click();
+  await page.getByRole("button", { name: "Generate token" }).click();
   const token = await page.locator(".output-copy code").textContent();
   expect(token).toMatch(/^tm2b_/u);
 
@@ -244,7 +249,7 @@ test("applies participant weekday hours in the display time zone", async ({ page
   const organizerZone = page.getByRole("combobox", { name: "Organizer time zone" });
   await organizerZone.fill("Shanghai");
   await page.getByRole("option", { name: /Asia\/Shanghai/u }).click();
-  await page.getByRole("button", { name: "Create meeting link" }).click();
+  await page.getByRole("button", { name: "Generate token" }).click();
   const baseToken = await page.locator(".output-copy code").textContent();
 
   await page.goto(`./#/${baseToken}`);
@@ -306,13 +311,13 @@ test("keeps organizer edits canonical after generation", async ({ page }) => {
   await page.goto("./");
   const firstSlot = page.locator('[data-slot-index="0"]');
   await firstSlot.click();
-  await page.getByRole("button", { name: "Create meeting link" }).click();
+  await page.getByRole("button", { name: "Generate token" }).click();
   const firstToken = await page.locator(".output-copy code").textContent();
 
   await firstSlot.click();
   await expect(firstSlot).not.toHaveClass(/marked-unavailable/u);
   await expect(firstSlot).toHaveAttribute("title", /Available$/u);
-  await page.getByRole("button", { name: "Create meeting link" }).click();
+  await page.getByRole("button", { name: "Generate token" }).click();
   const secondToken = await page.locator(".output-copy code").textContent();
   expect(secondToken).not.toBe(firstToken);
 
@@ -379,6 +384,6 @@ test("keeps the product controls usable on a narrow viewport", async ({ page }, 
   await page.goto("./");
   await expect(page.getByRole("heading", { name: /Shared time/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open tokens" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Define the meeting window" })).toBeVisible();
+  await expect(page.getByLabel("Starts")).toBeVisible();
   await expect(page.getByTestId("calendar-grid")).toBeVisible();
 });

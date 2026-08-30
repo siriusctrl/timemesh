@@ -46,10 +46,12 @@ export function FramePanel({
 
   return (
     <aside className="frame-panel">
-      <div className="panel-heading">
-        <h2>{participantView ? "Share when you are free" : "Define the meeting window"}</h2>
-        <Clock aria-hidden="true" size={23} />
-      </div>
+      {participantView ? (
+        <div className="panel-heading">
+          <h2>Share when you are free</h2>
+          <Clock aria-hidden="true" size={23} />
+        </div>
+      ) : null}
       <div className="field-grid">
         <label>
           <span>Starts</span>

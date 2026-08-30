@@ -30,9 +30,7 @@ export function TokenConsole({
           spellCheck={false}
           value={value}
         />
-        {notice
-          ? <p className={`console-notice ${notice.kind}`} role="status">{notice.message}</p>
-          : <span className="local-note">Decoded locally in this tab</span>}
+        {notice ? <p className={`console-notice ${notice.kind}`} role="status">{notice.message}</p> : null}
       </div>
       <button className="primary-action console-action" disabled={busy} onClick={onDecode} type="button">
         {busy ? "Decoding" : "Open tokens"}

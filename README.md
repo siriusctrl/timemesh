@@ -10,7 +10,7 @@ TimeMesh exchanges availability and finds shared meeting times with portable tok
 
 1. Choose a date window, organizer time zone, grid size, and meeting duration. The default window is 14 days and the maximum is 31 local calendar days.
 2. Mark organizer conflicts. The weekday-hours shortcut is editable and defaults to 08:00–20:00; applying it keeps those weekday hours open and blocks the rest.
-3. Select **Create meeting link**, then **Copy URL**. The URL contains a `tm2b_...` meeting token in its fragment.
+3. Select **Generate token**, then copy the token itself or use **Copy URL**. The URL contains the `tm2b_...` meeting token in its fragment.
 
 Time-zone fields accept canonical IANA names and major-city searches such as San Francisco or Miami. Tokens always store the canonical IANA zone.
 

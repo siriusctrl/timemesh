@@ -339,15 +339,6 @@ main {
   color: var(--accent);
 }
 
-.local-note {
-  display: block;
-  margin: 3px 2px 0;
-  color: var(--faint);
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 400;
-}
-
 .console-input {
   min-width: 0;
 }

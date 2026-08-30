@@ -60,7 +60,7 @@ try {
   await desktop.keyboard.press("Escape");
 
   await desktop.getByRole("button", { name: "Keep weekday hours" }).click();
-  await desktop.getByRole("button", { name: "Create meeting link" }).click();
+  await desktop.getByRole("button", { name: "Generate token" }).click();
   const baseToken = await desktop.locator(".output-copy code").textContent();
   await desktop.evaluate(() => window.scrollTo(0, 0));
   await capture(desktop, "03-generated-base");

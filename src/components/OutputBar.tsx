@@ -11,7 +11,7 @@ type OutputBarProps = {
   error?: string;
   mode: CalendarMode;
   onCopy: (value: string, type: Exclude<CopiedValue, null>) => void;
-  onCreateBase: () => void;
+  onGenerateBase: () => void;
   onCreateResponse: () => void;
   participantCount: number;
   participantToken: string;
@@ -26,7 +26,7 @@ export function OutputBar({
   error,
   mode,
   onCopy,
-  onCreateBase,
+  onGenerateBase,
   onCreateResponse,
   participantCount,
   participantToken,
@@ -40,7 +40,7 @@ export function OutputBar({
       <div className="output-copy">
         <BracketsCurly aria-hidden="true" size={21} />
         <div>
-          <span>{mode === "base" ? "Meeting link" : mode === "respond" ? "Your response" : "Responses being compared"}</span>
+          <span>{mode === "base" ? "Meeting token" : mode === "respond" ? "Your response" : "Responses being compared"}</span>
           <code>
             {mode === "plan"
               ? `${BASE_TOKEN_PREFIX}... + ${participantCount} ${PARTICIPANT_TOKEN_PREFIX}...`
@@ -55,7 +55,9 @@ export function OutputBar({
       </div>
       <div className="output-actions">
         {mode === "base" ? (
-          <button className="primary-action" onClick={onCreateBase} type="button">Create meeting link</button>
+          !baseToken
+            ? <button className="primary-action" onClick={onGenerateBase} type="button">Generate token</button>
+            : null
         ) : mode === "respond" ? (
           <button className="primary-action" disabled={!baseToken || busy} onClick={onCreateResponse} type="button">
             Generate response
