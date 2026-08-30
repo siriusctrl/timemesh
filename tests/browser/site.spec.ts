@@ -53,8 +53,33 @@ test("opens the agent skill and switches appearance", async ({ page }) => {
   await expect(page.getByText("Use the repository codec for every token operation.")).toBeVisible();
   await page.getByLabel("Close agent skill").click();
 
+  const iconOffset = await page.locator(".theme-action-icon").evaluate((slot) => {
+    const icon = slot.querySelector("svg");
+    if (!icon) return Number.POSITIVE_INFINITY;
+    const slotBox = slot.getBoundingClientRect();
+    const iconBox = icon.getBoundingClientRect();
+    return Math.max(
+      Math.abs(slotBox.left + slotBox.width / 2 - (iconBox.left + iconBox.width / 2)),
+      Math.abs(slotBox.top + slotBox.height / 2 - (iconBox.top + iconBox.height / 2)),
+    );
+  });
+  expect(iconOffset).toBeLessThan(0.75);
+
   await page.getByLabel("Switch to dark mode").click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+});
+
+test("searches and selects a display time zone", async ({ page }) => {
+  await page.goto("./");
+  const timeZone = page.getByRole("combobox", { name: "Display time zone" });
+  await timeZone.click();
+  expect(await page.getByRole("option").count()).toBeGreaterThan(20);
+
+  await timeZone.fill("Tokyo");
+  const tokyo = page.getByRole("option", { name: /Asia\/Tokyo/u });
+  await expect(tokyo).toBeVisible();
+  await tokyo.click();
+  await expect(timeZone).toHaveValue("Asia/Tokyo");
 });
 
 test("keeps the product controls usable on a narrow viewport", async ({ page }, testInfo) => {

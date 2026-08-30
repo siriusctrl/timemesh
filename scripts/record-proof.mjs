@@ -49,23 +49,28 @@ try {
     colorScheme: "light",
   });
   await desktop.goto(baseUrl, { waitUntil: "networkidle" });
+  await desktop.waitForTimeout(700);
   await capture(desktop, "01-base-workbench");
+
+  await desktop.getByRole("combobox", { name: "Display time zone" }).click();
+  await capture(desktop, "02-timezone-picker", false);
+  await desktop.keyboard.press("Escape");
 
   await desktop.getByRole("button", { name: "Keep weekdays 09:00-18:00" }).click();
   await desktop.getByRole("button", { name: "Generate base" }).click();
   await desktop.evaluate(() => window.scrollTo(0, 0));
-  await capture(desktop, "02-generated-base");
+  await capture(desktop, "03-generated-base");
 
   await desktop.getByRole("tab", { name: "Availability" }).click();
   await desktop.getByRole("button", { name: "Keep weekdays 09:00-18:00" }).click();
   await desktop.getByRole("button", { name: "Generate response" }).click();
   await desktop.getByRole("button", { name: "Add to plan" }).click();
   await desktop.evaluate(() => window.scrollTo(0, 0));
-  await capture(desktop, "03-overlap-plan");
+  await capture(desktop, "04-overlap-plan");
 
   await desktop.getByLabel("Switch to dark mode").click();
   await desktop.evaluate(() => window.scrollTo(0, 0));
-  await capture(desktop, "04-dark-plan");
+  await capture(desktop, "05-dark-plan");
 
   const mobile = await browser.newPage({
     viewport: { width: 393, height: 852 },
@@ -73,7 +78,7 @@ try {
     colorScheme: "light",
   });
   await mobile.goto(baseUrl, { waitUntil: "networkidle" });
-  await capture(mobile, "05-mobile-workbench");
+  await capture(mobile, "06-mobile-workbench");
   await browser.close();
 
   const thumbWidth = 620;
@@ -83,7 +88,7 @@ try {
   const rows = Math.ceil(captures.length / columns);
   const composites = await Promise.all(captures.map(async (item, index) => ({
     input: await sharp(item.path)
-      .resize(thumbWidth, thumbHeight, { fit: "contain", background: "#edf1ec" })
+      .resize(thumbWidth, thumbHeight, { fit: "contain", background: "#f1f1f3" })
       .png()
       .toBuffer(),
     left: (index % columns) * (thumbWidth + gap),
@@ -94,7 +99,7 @@ try {
       width: columns * thumbWidth + gap,
       height: rows * thumbHeight + (rows - 1) * gap,
       channels: 3,
-      background: "#edf1ec",
+      background: "#f1f1f3",
     },
   }).composite(composites).png().toFile(resolve(outputDirectory, "contact-sheet.png"));
 

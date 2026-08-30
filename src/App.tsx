@@ -16,6 +16,7 @@ import { CalendarGrid, type CalendarMode } from "./components/CalendarGrid";
 import { FramePanel, type FrameSettings } from "./components/FramePanel";
 import { PlannerPanel } from "./components/PlannerPanel";
 import { SkillDrawer } from "./components/SkillDrawer";
+import { TimeZoneSelect } from "./components/TimeZoneSelect";
 import { TokenConsole } from "./components/TokenConsole";
 import { bitsetToSet, countBits, createBitset, getBit } from "./protocol/bits";
 import {
@@ -314,11 +315,14 @@ export default function App() {
           <span className="local-status"><ShieldCheck aria-hidden="true" size={16} weight="fill" /> Local only</span>
           <button
             aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-            className="icon-action"
+            className="theme-action"
             onClick={() => setTheme(theme === "light" ? "dark" : "light")}
             type="button"
           >
-            {theme === "light" ? <Moon aria-hidden="true" size={18} /> : <Sun aria-hidden="true" size={18} />}
+            <span className="theme-action-icon">
+              {theme === "light" ? <Moon aria-hidden="true" size={16} /> : <Sun aria-hidden="true" size={16} />}
+            </span>
+            <span>{theme === "light" ? "Dark" : "Light"}</span>
           </button>
         </nav>
       </header>
@@ -326,9 +330,9 @@ export default function App() {
       <main>
         <section className="hero-workbench">
           <div className="hero-copy">
-            <span className="hero-kicker">Portable availability protocol</span>
+            <span className="hero-kicker">Local scheduling protocol</span>
             <h1>Shared time,<br /><em>encoded.</em></h1>
-            <p>Exchange reversible tokens. Find the overlap. Keep every calendar local.</p>
+            <p>Share availability, compare overlap, and keep every calendar in this tab.</p>
           </div>
           <TokenConsole
             busy={busy}
@@ -353,20 +357,13 @@ export default function App() {
               </button>
             </div>
             <div className="view-controls">
-              <label>
-                <span>Display zone</span>
-                <input
-                  aria-label="Display time zone"
-                  list="display-timezones"
-                  onChange={(event) => setDisplayTimezone(event.target.value)}
-                  value={displayTimezone}
-                />
-                <datalist id="display-timezones">
-                  {[base.timezone, systemTimeZone(), "UTC", "Asia/Shanghai", "Europe/London", "America/New_York"].map(
-                    (zone) => <option key={zone} value={zone} />,
-                  )}
-                </datalist>
-              </label>
+              <TimeZoneSelect
+                ariaLabel="Display time zone"
+                id="display-timezone"
+                label="Display zone"
+                onChange={setDisplayTimezone}
+                value={displayTimezone}
+              />
               <button className="view-toggle" onClick={() => setFullDay(!fullDay)} type="button">
                 {fullDay ? <EyeSlash aria-hidden="true" size={16} /> : <Eye aria-hidden="true" size={16} />}
                 {fullDay ? "Focus hours" : "Full day"}
