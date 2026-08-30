@@ -46,16 +46,23 @@ import {
 } from "./protocol/types";
 
 type Theme = "light" | "dark";
+type ThemePreference = Theme | "system";
 type Notice = { kind: "success" | "error" | "info"; message: string };
+const THEME_STORAGE_KEY = "timemesh-theme-preference";
 
-function initialTheme(): Theme {
+function systemTheme(): Theme {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function initialThemePreference(): ThemePreference {
   try {
-    const saved = window.localStorage.getItem("timemesh-theme");
+    const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+    window.localStorage.removeItem("timemesh-theme");
     if (saved === "light" || saved === "dark") return saved;
   } catch {
-    // System preference remains available when storage is disabled.
+    // System preference remains available when storage cannot be read.
   }
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "system";
 }
 
 function createInitialState(): { settings: FrameSettings; base: BaseAllocation } {
@@ -93,7 +100,9 @@ function safeTimeZone(candidate: string, fallback: string): string {
 
 export default function App() {
   const initial = useMemo(createInitialState, []);
-  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [themePreference, setThemePreference] = useState<ThemePreference>(initialThemePreference);
+  const [systemThemeValue, setSystemThemeValue] = useState<Theme>(systemTheme);
+  const theme = themePreference === "system" ? systemThemeValue : themePreference;
   const [mode, setMode] = useState<CalendarMode>("base");
   const [settings, setSettings] = useState<FrameSettings>(initial.settings);
   const [base, setBase] = useState<BaseAllocation>(initial.base);
@@ -110,15 +119,31 @@ export default function App() {
   const [skillOpen, setSkillOpen] = useState(false);
   const [copiedValue, setCopiedValue] = useState<"token" | "url" | null>(null);
 
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncSystemTheme = (event: MediaQueryListEvent) => {
+      setSystemThemeValue(event.matches ? "dark" : "light");
+    };
+    preference.addEventListener("change", syncSystemTheme);
+    return () => preference.removeEventListener("change", syncSystemTheme);
+  }, []);
+
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
-    try {
-      window.localStorage.setItem("timemesh-theme", theme);
-    } catch {
-      // The selected theme still applies to the current tab.
-    }
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+      ?.setAttribute("content", theme === "dark" ? "#24252b" : "#f1f1f3");
   }, [theme]);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "light" ? "dark" : "light";
+    setThemePreference(nextTheme);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    } catch {
+      // The explicit theme still applies to the current tab.
+    }
+  };
 
   const scores = useMemo(
     () => availabilityScores(base, participants),
@@ -308,13 +333,15 @@ export default function App() {
           <button
             aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
             className="theme-action"
-            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+            onClick={toggleTheme}
+            title={themePreference === "system"
+              ? `Following system ${theme} mode. Switch to ${theme === "light" ? "dark" : "light"} mode`
+              : `Switch to ${theme === "light" ? "dark" : "light"} mode`}
             type="button"
           >
             <span className="theme-action-icon">
               {theme === "light" ? <Moon aria-hidden="true" size={16} /> : <Sun aria-hidden="true" size={16} />}
             </span>
-            <span>{theme === "light" ? "Dark" : "Light"}</span>
           </button>
         </nav>
       </header>

@@ -20,31 +20,33 @@
   --danger-soft: #f0dedb;
   --blocked: #858a95;
   --shadow: 0 18px 52px rgb(40 45 68 / 10%);
+  --shadow-soft: 0 10px 32px rgb(40 45 68 / 7%);
   --radius-card: 14px;
   --radius-control: 8px;
   --radius-pill: 999px;
 }
 
 :root[data-theme="dark"] {
-  --page: #121319;
-  --page-deep: #171922;
-  --surface: #1a1c24;
-  --surface-raised: #20232c;
-  --surface-muted: #262a35;
-  --ink: #f0f1f5;
-  --ink-soft: #d1d4dd;
-  --muted: #a1a6b2;
-  --faint: #777e8d;
-  --line: #343844;
-  --line-strong: #4b5160;
-  --accent: #8998eb;
-  --accent-strong: #a9b4f5;
-  --accent-soft: #2b3150;
-  --accent-ink: #cbd2ff;
-  --danger: #e58f86;
-  --danger-soft: #442522;
-  --blocked: #7c8290;
-  --shadow: 0 24px 64px rgb(0 0 0 / 32%);
+  --page: #24252b;
+  --page-deep: #282a31;
+  --surface: #2b2c33;
+  --surface-raised: #303139;
+  --surface-muted: #373840;
+  --ink: #d3d4d8;
+  --ink-soft: #babcc3;
+  --muted: #9497a0;
+  --faint: #767a84;
+  --line: #3e4049;
+  --line-strong: #535660;
+  --accent: #7883b3;
+  --accent-strong: #969fc5;
+  --accent-soft: #3a3d4e;
+  --accent-ink: #b9bfdc;
+  --danger: #c88983;
+  --danger-soft: #4b3333;
+  --blocked: #737780;
+  --shadow: 0 24px 64px rgb(21 23 31 / 20%);
+  --shadow-soft: 0 10px 32px rgb(21 23 31 / 14%);
 }
 
 * {
@@ -200,6 +202,12 @@ a:focus-visible {
   font-weight: 680;
 }
 
+.site-header nav > .theme-action {
+  width: 34px;
+  padding: 0;
+  justify-content: center;
+}
+
 .site-header nav > button:hover {
   border-color: var(--line-strong);
   transform: translateY(-1px);
@@ -245,7 +253,7 @@ main {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface-raised);
-  box-shadow: 0 8px 26px rgb(40 45 68 / 6%);
+  box-shadow: var(--shadow-soft);
 }
 
 .console-label {
@@ -318,7 +326,7 @@ main {
 }
 
 :root[data-theme="dark"] .primary-action {
-  color: #171a29;
+  color: #252731;
 }
 
 .secondary-action,
@@ -368,7 +376,7 @@ main {
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   background: var(--surface);
-  box-shadow: 0 14px 44px rgb(40 45 68 / 8%);
+  box-shadow: var(--shadow-soft);
 }
 
 .workspace-summary,
@@ -1213,10 +1221,6 @@ main {
     min-height: 32px;
     padding: 0 9px;
     font-size: 11px;
-  }
-
-  .theme-action > span:last-child {
-    display: none;
   }
 
   .theme-action {

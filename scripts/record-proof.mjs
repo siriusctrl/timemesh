@@ -76,6 +76,7 @@ try {
   await capture(desktop, "05-overlap-plan");
 
   await desktop.getByLabel("Switch to dark mode").click();
+  await desktop.waitForTimeout(250);
   await desktop.evaluate(() => window.scrollTo(0, 0));
   await capture(desktop, "06-dark-plan");
 

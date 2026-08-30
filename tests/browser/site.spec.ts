@@ -97,7 +97,14 @@ test("opens a base token from a pretty path route", async ({ page }) => {
 });
 
 test("opens the agent skill and switches appearance", async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem("timemesh-theme", "light"));
+  await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("./");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(await page.evaluate(() => window.localStorage.getItem("timemesh-theme"))).toBeNull();
+  await expect(page.locator(".theme-action")).toHaveText("");
+  await expect(page.locator(".theme-action")).toHaveAttribute("title", /Following system dark mode/u);
+
   await page.getByRole("button", { name: "Agent skill", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Agent skill" })).toBeVisible();
   await expect(page.getByText("Use the repository codec for every token operation.")).toBeVisible();
@@ -115,7 +122,26 @@ test("opens the agent skill and switches appearance", async ({ page }) => {
   });
   expect(iconOffset).toBeLessThan(0.75);
 
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.getByLabel("Switch to dark mode").click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+  const darkContrast = await page.evaluate(() => {
+    const styles = getComputedStyle(document.documentElement);
+    const luminance = (hex: string) => {
+      const channels = [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255)
+        .map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    };
+    const pageLuminance = luminance(styles.getPropertyValue("--page").trim());
+    const inkLuminance = luminance(styles.getPropertyValue("--ink").trim());
+    return (Math.max(pageLuminance, inkLuminance) + 0.05) / (Math.min(pageLuminance, inkLuminance) + 0.05);
+  });
+  expect(darkContrast).toBeGreaterThanOrEqual(7);
+  expect(darkContrast).toBeLessThan(12);
+
+  await page.emulateMedia({ colorScheme: "light" });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 

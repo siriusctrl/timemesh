@@ -3,12 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f2f5f0" />
+    <meta name="theme-color" content="#f1f1f3" />
     <meta
       name="description"
       content="Plan shared time with portable, reversible availability tokens. No account and no backend."
     />
     <script>
+      (function () {
+        var savedTheme;
+        try {
+          savedTheme = window.localStorage.getItem("timemesh-theme-preference");
+          window.localStorage.removeItem("timemesh-theme");
+        } catch (error) {
+          savedTheme = null;
+        }
+        var theme = savedTheme === "light" || savedTheme === "dark"
+          ? savedTheme
+          : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        document.querySelector('meta[name="theme-color"]').setAttribute(
+          "content",
+          theme === "dark" ? "#24252b" : "#f1f1f3",
+        );
+      })();
+
       (function (location) {
         if (location.search.startsWith("?/")) {
           var restored = location.search.slice(2).replace(/~and~/g, "&");
