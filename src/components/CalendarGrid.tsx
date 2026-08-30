@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { alignSlotDays } from "../calendar/alignDays";
 import { getBit } from "../protocol/bits";
 import { groupSlotsByDay } from "../protocol/time";
 import type { BaseAllocation } from "../protocol/types";
@@ -39,6 +40,18 @@ export function CalendarGrid({
     })),
     [days, fullDay],
   );
+  const aligned = useMemo(
+    () => alignSlotDays(visibleDays, base.slotMinutes),
+    [base.slotMinutes, visibleDays],
+  );
+  const firstEditableSlot = useMemo(() => aligned.days
+    .flatMap((day) => day.slots)
+    .find((slot) => slot && (mode !== "respond" || !getBit(base.unavailable, slot.index)))?.index ?? -1,
+  [aligned.days, base.unavailable, mode]);
+  const [focusedSlot, setFocusedSlot] = useState(firstEditableSlot);
+  const slotButtons = useRef(new Map<number, HTMLButtonElement>());
+
+  useEffect(() => setFocusedSlot(firstEditableSlot), [firstEditableSlot]);
 
   useEffect(() => {
     const stopDragging = () => {
@@ -78,32 +91,46 @@ export function CalendarGrid({
       : `${score} of ${participantCount} participants free`;
   };
 
-  const timeRail = visibleDays[0]?.slots ?? [];
+  const focusCell = (dayIndex: number, rowIndex: number, dayStep: number, rowStep: number) => {
+    let nextDay = dayIndex + dayStep;
+    let nextRow = rowIndex + rowStep;
+    while (nextDay >= 0 && nextDay < aligned.days.length && nextRow >= 0 && nextRow < aligned.rows.length) {
+      const slot = aligned.days[nextDay]?.slots[nextRow];
+      if (slot && (mode !== "respond" || !getBit(base.unavailable, slot.index))) {
+        setFocusedSlot(slot.index);
+        slotButtons.current.get(slot.index)?.focus();
+        return;
+      }
+      nextDay += dayStep;
+      nextRow += rowStep;
+    }
+  };
 
   return (
     <div className="calendar-shell" data-testid="calendar-grid">
       <div className="calendar-scroll">
         <div
           className="calendar-grid"
-          style={{ gridTemplateColumns: `48px repeat(${visibleDays.length}, minmax(56px, 1fr))` }}
+          style={{ gridTemplateColumns: `48px repeat(${aligned.days.length}, minmax(56px, 1fr))` }}
         >
           <div className="calendar-corner">Time</div>
-          {visibleDays.map((day) => (
+          {aligned.days.map((day) => (
             <div className="day-heading" key={day.key}>
               <span>{day.weekdayLabel}</span>
               <strong>{day.dateLabel}</strong>
             </div>
           ))}
           <div className="time-rail" aria-hidden="true">
-            {timeRail.map((slot) => (
-              <div className="time-rail-slot" key={slot.index}>
+            {aligned.rows.map((slot) => (
+              <div className="time-rail-slot" key={slot.key}>
                 {slot.minute === 0 ? slot.timeLabel : ""}
               </div>
             ))}
           </div>
-          {visibleDays.map((day) => (
+          {aligned.days.map((day, dayIndex) => (
             <div className="day-column" key={day.key}>
-              {day.slots.map((slot) => {
+              {day.slots.map((slot, rowIndex) => {
+                if (!slot) return <span aria-hidden="true" className="time-slot time-slot-empty" key={`empty-${rowIndex}`} />;
                 const hostBlocked = getBit(base.unavailable, slot.index);
                 const active = mode === "base" ? selected.has(slot.index) : mode === "respond" && selected.has(slot.index);
                 const score = scores[slot.index] ?? 0;
@@ -115,6 +142,9 @@ export function CalendarGrid({
                   active ? (mode === "base" ? "marked-unavailable" : "marked-free") : "",
                   mode === "plan" && !hostBlocked ? "heat-slot" : "",
                 ].filter(Boolean).join(" ");
+                if (mode === "plan") {
+                  return <span aria-label={`${day.weekdayLabel} ${day.dateLabel} ${slot.timeLabel}: ${statusForSlot(slot.index)}`} className={classNames} key={slot.index} role="img" />;
+                }
                 return (
                   <button
                     aria-label={`${day.weekdayLabel} ${day.dateLabel} ${slot.timeLabel}: ${statusForSlot(slot.index)}`}
@@ -122,10 +152,17 @@ export function CalendarGrid({
                     data-slot-index={slot.index}
                     disabled={mode === "respond" && hostBlocked}
                     key={slot.index}
+                    onFocus={() => setFocusedSlot(slot.index)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
                         setSlot(slot.index, !selected.has(slot.index));
+                      } else if (event.key.startsWith("Arrow")) {
+                        event.preventDefault();
+                        if (event.key === "ArrowUp") focusCell(dayIndex, rowIndex, 0, -1);
+                        if (event.key === "ArrowDown") focusCell(dayIndex, rowIndex, 0, 1);
+                        if (event.key === "ArrowLeft") focusCell(dayIndex, rowIndex, -1, 0);
+                        if (event.key === "ArrowRight") focusCell(dayIndex, rowIndex, 1, 0);
                       }
                     }}
                     onPointerDown={(event) => {
@@ -136,8 +173,13 @@ export function CalendarGrid({
                       if (dragging.current) setSlot(slot.index, dragValue.current);
                     }}
                     style={{ "--heat-strength": `${Math.round(ratio * 82)}%` } as React.CSSProperties}
+                    tabIndex={slot.index === focusedSlot ? 0 : -1}
                     title={`${slot.timeLabel} ${slot.offset} - ${statusForSlot(slot.index)}`}
                     type="button"
+                    ref={(button) => {
+                      if (button) slotButtons.current.set(slot.index, button);
+                      else slotButtons.current.delete(slot.index);
+                    }}
                   />
                 );
               })}

@@ -1,24 +1,15 @@
-import {
-  BracketsCurly,
-  Check,
-  Copy,
-  Eye,
-  EyeSlash,
-  LinkSimple,
-  Moon,
-  Robot,
-  ShieldCheck,
-  Sun,
-} from "@phosphor-icons/react";
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { Eye, EyeSlash } from "@phosphor-icons/react";
+import { useEffect, useMemo, useState } from "react";
 import agentSkill from "../skills/plan-time-with-tokens/SKILL.md?raw";
+import { AppHeader } from "./components/AppHeader";
 import { CalendarGrid, type CalendarMode } from "./components/CalendarGrid";
 import { FramePanel, type FrameSettings } from "./components/FramePanel";
+import { OutputBar } from "./components/OutputBar";
 import { PlannerPanel } from "./components/PlannerPanel";
 import { SkillDrawer } from "./components/SkillDrawer";
 import { TimeZoneSelect } from "./components/TimeZoneSelect";
 import { TokenConsole } from "./components/TokenConsole";
-import { bitsetToSet, countBits, createBitset, getBit } from "./protocol/bits";
+import { bitsetToSet, createBitset, getBit } from "./protocol/bits";
 import {
   decodeParticipantToken,
   decodeTokenBundle,
@@ -39,32 +30,12 @@ import {
 import {
   BASE_TOKEN_PREFIX,
   DEFAULT_SLOT_MINUTES,
-  PARTICIPANT_TOKEN_PREFIX,
   type BaseAllocation,
   type ParticipantAllocation,
-  type TokenError,
 } from "./protocol/types";
-import { beginThemeReveal } from "./themeReveal";
+import { useTheme } from "./useTheme";
 
-type Theme = "light" | "dark";
-type ThemePreference = Theme | "system";
 type Notice = { kind: "success" | "error" | "info"; message: string };
-const THEME_STORAGE_KEY = "timemesh-theme-preference";
-
-function systemTheme(): Theme {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
-function initialThemePreference(): ThemePreference {
-  try {
-    const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
-    window.localStorage.removeItem("timemesh-theme");
-    if (saved === "light" || saved === "dark") return saved;
-  } catch {
-    // System preference remains available when storage cannot be read.
-  }
-  return "system";
-}
 
 function createInitialState(): { settings: FrameSettings; base: BaseAllocation } {
   const timezone = systemTimeZone();
@@ -101,13 +72,10 @@ function safeTimeZone(candidate: string, fallback: string): string {
 
 export default function App() {
   const initial = useMemo(createInitialState, []);
-  const [themePreference, setThemePreference] = useState<ThemePreference>(initialThemePreference);
-  const [systemThemeValue, setSystemThemeValue] = useState<Theme>(systemTheme);
-  const theme = themePreference === "system" ? systemThemeValue : themePreference;
+  const { followsSystem, theme, toggleTheme } = useTheme();
   const [mode, setMode] = useState<CalendarMode>("base");
   const [settings, setSettings] = useState<FrameSettings>(initial.settings);
   const [base, setBase] = useState<BaseAllocation>(initial.base);
-  const [blockedSlots, setBlockedSlots] = useState<Set<number>>(new Set());
   const [freeSlots, setFreeSlots] = useState<Set<number>>(new Set());
   const [baseToken, setBaseToken] = useState("");
   const [participantToken, setParticipantToken] = useState("");
@@ -120,42 +88,13 @@ export default function App() {
   const [skillOpen, setSkillOpen] = useState(false);
   const [copiedValue, setCopiedValue] = useState<"token" | "url" | null>(null);
 
-  useEffect(() => {
-    const preference = window.matchMedia("(prefers-color-scheme: dark)");
-    const syncSystemTheme = (event: MediaQueryListEvent) => {
-      setSystemThemeValue(event.matches ? "dark" : "light");
-    };
-    preference.addEventListener("change", syncSystemTheme);
-    return () => preference.removeEventListener("change", syncSystemTheme);
-  }, []);
-
-  useLayoutEffect(() => {
-    if (document.documentElement.dataset.themeTransition === "active") return;
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.style.colorScheme = theme;
-    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
-      ?.setAttribute("content", theme === "dark" ? "#24252b" : "#f1f1f3");
-  }, [theme]);
-
-  const toggleTheme = (trigger: HTMLButtonElement) => {
-    if (document.documentElement.dataset.themeTransition === "active") return;
-    const nextTheme = theme === "light" ? "dark" : "light";
-    beginThemeReveal(trigger, nextTheme);
-    setThemePreference(nextTheme);
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
-    } catch {
-      // The explicit theme still applies to the current tab.
-    }
-  };
-
   const scores = useMemo(
     () => availabilityScores(base, participants),
     [base, participants],
   );
   const candidates = useMemo(
-    () => findCandidateWindows(base, participants),
-    [base, participants],
+    () => mode === "plan" ? findCandidateWindows(base, participants) : [],
+    [base, mode, participants],
   );
   const effectiveDisplayTimezone = useMemo(
     () => safeTimeZone(displayTimezone, base.timezone),
@@ -163,7 +102,10 @@ export default function App() {
   );
 
   const markBaseDirty = (nextBlocked: Set<number>) => {
-    setBlockedSlots(nextBlocked);
+    setBase((current) => ({
+      ...current,
+      unavailable: createBitset(current.slotCount, nextBlocked),
+    }));
     if (baseToken) {
       setBaseToken("");
       setParticipantToken("");
@@ -181,20 +123,24 @@ export default function App() {
       const nextBase = createBaseAllocation(normalized);
       setSettings(normalized);
       setBase(nextBase);
-      setBlockedSlots(new Set());
       setFreeSlots(new Set());
       setBaseToken("");
       setParticipantToken("");
       setParticipants([]);
       setNotice(null);
     } catch (error) {
-      setSettings(normalized);
       setNotice({ kind: "error", message: errorMessage(error) });
     }
   };
 
   const applyWorkHours = (startMinute: number, endMinute: number) => {
-    const workHours = workHoursSlotSet(base, base.timezone, startMinute, endMinute, true);
+    const workHours = workHoursSlotSet(
+      base,
+      mode === "respond" ? effectiveDisplayTimezone : base.timezone,
+      startMinute,
+      endMinute,
+      true,
+    );
     if (mode === "base") {
       const unavailable = new Set<number>();
       for (let index = 0; index < base.slotCount; index += 1) {
@@ -221,9 +167,7 @@ export default function App() {
 
   const generateBase = () => {
     try {
-      const nextBase = { ...base, unavailable: createBitset(base.slotCount, blockedSlots) };
-      const token = encodeBaseToken(nextBase);
-      setBase(nextBase);
+      const token = encodeBaseToken(base);
       setBaseToken(token);
       setParticipantToken("");
       setTokenInput(token);
@@ -256,10 +200,6 @@ export default function App() {
       const hasBase = pasted.some((token) => token.startsWith(BASE_TOKEN_PREFIX));
       const source = hasBase || !baseToken ? input : `${baseToken}\n${input}`;
       const bundle = await decodeTokenBundle(source);
-      const uniqueParticipantTokens = [...new Set(bundle.participantTokens)];
-      const uniqueParticipants = await Promise.all(
-        uniqueParticipantTokens.map((token) => decodeParticipantToken(token, bundle.baseToken, bundle.base)),
-      );
       setBase(bundle.base);
       setSettings({
         startDate: baseStartDate(bundle.base),
@@ -268,22 +208,20 @@ export default function App() {
         slotMinutes: bundle.base.slotMinutes,
         meetingMinutes: bundle.base.meetingMinutes,
       });
-      setBlockedSlots(bitsetToSet(bundle.base.unavailable, bundle.base.slotCount));
       setBaseToken(bundle.baseToken);
-      setParticipants(uniqueParticipants);
+      setParticipants(bundle.participants);
       setParticipantToken("");
       setFreeSlots(new Set());
-      setMode(uniqueParticipants.length > 0 ? "plan" : "respond");
-      setTokenInput([bundle.baseToken, ...uniqueParticipantTokens].join("\n"));
+      setMode(bundle.participants.length > 0 ? "plan" : "respond");
+      setTokenInput([bundle.baseToken, ...bundle.participantTokens].join("\n"));
       setNotice({
         kind: "success",
-        message: uniqueParticipants.length > 0
-          ? `Loaded ${uniqueParticipants.length} response${uniqueParticipants.length === 1 ? "" : "s"} for comparison.`
+        message: bundle.participants.length > 0
+          ? `Loaded ${bundle.participants.length} response${bundle.participants.length === 1 ? "" : "s"} for comparison.`
           : "Meeting opened. Mark every time that works for you.",
       });
     } catch (error) {
-      const tokenError = error as TokenError;
-      setNotice({ kind: "error", message: tokenError.message || errorMessage(error) });
+      setNotice({ kind: "error", message: errorMessage(error) });
     } finally {
       setBusy(false);
     }
@@ -304,54 +242,27 @@ export default function App() {
     window.setTimeout(() => setCopiedValue(null), 1600);
   };
 
-  const outputToken = mode === "base" ? baseToken : mode === "respond" ? participantToken : "";
   const urlTokenBundle = mode === "respond" && participantToken
     ? `${baseToken}/${participantToken}`
-    : outputToken;
+    : mode === "base" ? baseToken : "";
   const shareUrl = urlTokenBundle
     ? `${window.location.origin}${import.meta.env.BASE_URL}#/${urlTokenBundle}`
     : "";
+  const blockedSlots = useMemo(
+    () => bitsetToSet(base.unavailable, base.slotCount),
+    [base],
+  );
   const activeSelection = mode === "base" ? blockedSlots : freeSlots;
-  const selectedCount = mode === "base"
-    ? blockedSlots.size
-    : mode === "respond"
-      ? freeSlots.size
-      : scores.filter((score) => score >= 0).length;
-
   return (
     <div className={`app-shell app-shell-${mode}`}>
-      <header className="site-header">
-        <div className="header-identity">
-          <a className="brand" href={import.meta.env.BASE_URL}>
-            <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span>
-            <span>TimeMesh</span>
-          </a>
-          <h1 className="header-tagline">Shared time, <em>encoded.</em></h1>
-        </div>
-        <nav aria-label="Primary">
-          <button onClick={() => setSkillOpen(true)} type="button">
-            <Robot aria-hidden="true" size={17} />
-            Agent skill
-          </button>
-          <span className="local-status"><ShieldCheck aria-hidden="true" size={16} weight="fill" /> Local only</span>
-          <button
-            aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-            className="theme-action"
-            onClick={(event) => toggleTheme(event.currentTarget)}
-            title={themePreference === "system"
-              ? `Following system ${theme} mode. Switch to ${theme === "light" ? "dark" : "light"} mode`
-              : `Switch to ${theme === "light" ? "dark" : "light"} mode`}
-            type="button"
-          >
-            <span className="theme-action-icon">
-              <Moon aria-hidden="true" className="theme-moon" size={16} />
-              <Sun aria-hidden="true" className="theme-sun" size={16} />
-            </span>
-          </button>
-        </nav>
-      </header>
+      <AppHeader
+        followsSystem={followsSystem}
+        onOpenSkill={() => setSkillOpen(true)}
+        onToggleTheme={toggleTheme}
+        theme={theme}
+      />
 
-      <main>
+      <main id="schedule-workspace">
         {mode !== "respond" ? (
           <section className="command-strip">
             <TokenConsole
@@ -366,36 +277,19 @@ export default function App() {
 
         <section className="workspace" aria-label="Time allocation workspace">
           <div className="workspace-summary">
-            <div>
-              <span>{mode === "base"
-                ? "Create a meeting · mark organizer conflicts"
-                : mode === "respond"
-                  ? "Your response · mark every time that works"
-                  : `Compare ${participants.length} response${participants.length === 1 ? "" : "s"}`}</span>
-              <strong>{describeBaseRange(base, effectiveDisplayTimezone)}</strong>
-            </div>
-            <div className="workspace-summary-tools">
-              <div className="view-controls">
-                <TimeZoneSelect
-                  ariaLabel="Display time zone"
-                  id="display-timezone"
-                  label="Display zone"
-                  onChange={setDisplayTimezone}
-                  value={displayTimezone}
-                />
-                <button className="view-toggle" onClick={() => setFullDay(!fullDay)} type="button">
-                  {fullDay ? <EyeSlash aria-hidden="true" size={16} /> : <Eye aria-hidden="true" size={16} />}
-                  {fullDay ? "Focus hours" : "Full day"}
-                </button>
-              </div>
-              <dl>
-                <div><dt>Grid</dt><dd>{base.slotMinutes}m</dd></div>
-                <div><dt>{mode === "base" ? "Blocked" : mode === "respond" ? "Free" : "Open"}</dt><dd>{selectedCount}</dd></div>
-                <div>
-                  <dt>{mode === "respond" ? "Meeting" : "Responses"}</dt>
-                  <dd>{mode === "respond" ? `${base.meetingMinutes}m` : participants.length}</dd>
-                </div>
-              </dl>
+            <strong className="workspace-range">{describeBaseRange(base, effectiveDisplayTimezone)}</strong>
+            <div className="view-controls">
+              <TimeZoneSelect
+                ariaLabel="Display time zone"
+                id="display-timezone"
+                label="Display zone"
+                onChange={setDisplayTimezone}
+                value={displayTimezone}
+              />
+              <button className="view-toggle" onClick={() => setFullDay(!fullDay)} type="button">
+                {fullDay ? <EyeSlash aria-hidden="true" size={16} /> : <Eye aria-hidden="true" size={16} />}
+                {fullDay ? "Focus hours" : "Full day"}
+              </button>
             </div>
           </div>
 
@@ -421,7 +315,7 @@ export default function App() {
                 ) : (
                   <><span><i className="legend-free" /> More people free</span><span><i className="legend-blocked" /> Organizer unavailable</span></>
                 )}
-                <span className="legend-help">Drag across the grid</span>
+                <span className="legend-help">{mode === "plan" ? "Read the overlap grid" : "Drag or use arrow keys"}</span>
               </div>
               <CalendarGrid
                 base={base}
@@ -439,49 +333,20 @@ export default function App() {
             </div>
           </div>
 
-          <div className="output-bar">
-            <div className="output-copy">
-              <BracketsCurly aria-hidden="true" size={21} />
-              <div>
-                <span>{mode === "base" ? "Meeting link" : mode === "respond" ? "Your response" : "Responses being compared"}</span>
-                <code>
-                  {mode === "plan"
-                    ? `${BASE_TOKEN_PREFIX}... + ${participants.length} ${PARTICIPANT_TOKEN_PREFIX}...`
-                    : outputToken || "Generate when the allocation is ready"}
-                </code>
-                {mode === "respond" && participantToken ? (
-                  <small role="status">Copy the URL and send it back to the organizer.</small>
-                ) : mode === "respond" && notice?.kind === "error" ? (
-                  <small className="output-error" role="status">{notice.message}</small>
-                ) : null}
-              </div>
-            </div>
-            <div className="output-actions">
-              {mode === "base" ? (
-                <button className="primary-action" onClick={generateBase} type="button">Create meeting link</button>
-              ) : mode === "respond" ? (
-                <button className="primary-action" disabled={!baseToken || busy} onClick={() => void generateParticipant()} type="button">
-                  Generate response
-                </button>
-              ) : (
-                <button className="secondary-action" onClick={() => void copyText(tokenInput, "token")} type="button">
-                  <Copy aria-hidden="true" size={16} /> Copy bundle
-                </button>
-              )}
-              {outputToken ? (
-                <>
-                  <button className="secondary-action" onClick={() => void copyText(outputToken, "token")} type="button">
-                    {copiedValue === "token" ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
-                    {copiedValue === "token" ? "Copied" : "Copy token"}
-                  </button>
-                  <button className="secondary-action" onClick={() => void copyText(shareUrl, "url")} type="button">
-                    {copiedValue === "url" ? <Check aria-hidden="true" size={16} /> : <LinkSimple aria-hidden="true" size={16} />}
-                    {copiedValue === "url" ? "Copied" : "Copy URL"}
-                  </button>
-                </>
-              ) : null}
-            </div>
-          </div>
+          <OutputBar
+            baseToken={baseToken}
+            busy={busy}
+            copiedValue={copiedValue}
+            error={notice?.kind === "error" ? notice.message : undefined}
+            mode={mode}
+            onCopy={(value, type) => void copyText(value, type)}
+            onCreateBase={generateBase}
+            onCreateResponse={() => void generateParticipant()}
+            participantCount={participants.length}
+            participantToken={participantToken}
+            shareUrl={shareUrl}
+            tokenBundle={tokenInput}
+          />
         </section>
 
       </main>

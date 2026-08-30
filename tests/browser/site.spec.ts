@@ -12,8 +12,8 @@ test("moves from organizer link to participant response and comparison", async (
   await page.goto("./");
   await expect(page.getByRole("heading", { name: /Shared time/ })).toBeVisible();
   await expect(page.getByTestId("calendar-grid")).toBeVisible();
-  await expect(page.getByText("15m", { exact: true })).toBeVisible();
-  await expect(page.getByText("Create a meeting · mark organizer conflicts")).toBeVisible();
+  await expect(page.getByLabel("Grid")).toHaveValue("15");
+  await expect(page.getByRole("heading", { name: "Define the meeting window" })).toBeVisible();
   await expect(page.getByRole("tablist")).toHaveCount(0);
 
   await expect(page.getByLabel("Weekday hours start")).toHaveValue("08:00");
@@ -30,7 +30,6 @@ test("moves from organizer link to participant response and comparison", async (
   await page.goto(meetingUrl!);
   await page.reload();
   await expect(page.getByRole("heading", { name: "Share when you are free" })).toBeVisible();
-  await expect(page.getByText("Your response · mark every time that works")).toBeVisible();
   await expect(page.getByRole("tablist")).toHaveCount(0);
   await expect(page.getByLabel("TimeMesh tokens")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Add to plan" })).toHaveCount(0);
@@ -67,7 +66,6 @@ test("moves from organizer link to participant response and comparison", async (
   await page.goto(responseUrl!);
   await page.reload();
   await expect(page.getByText("Best shared time")).toBeVisible();
-  await expect(page.getByText("Compare 1 response", { exact: true })).toBeVisible();
   await expect(page.getByRole("tablist")).toHaveCount(0);
   await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(/tm2b_[A-Za-z0-9_-]+\ntm2p_[A-Za-z0-9_-]+/u);
 });
@@ -102,13 +100,21 @@ test("opens the agent skill and switches appearance", async ({ page }) => {
   await page.goto("./");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   expect(await page.evaluate(() => window.localStorage.getItem("timemesh-theme"))).toBeNull();
+  await expect(page.getByText("Local only")).toHaveCount(0);
   await expect(page.locator(".theme-action")).toHaveText("");
   await expect(page.locator(".theme-action")).toHaveAttribute("title", /Following system dark mode/u);
+  const themeRightGap = await page.locator(".theme-action").evaluate((button) =>
+    window.innerWidth - button.getBoundingClientRect().right);
+  expect(themeRightGap).toBeLessThanOrEqual(20);
 
   await page.getByRole("button", { name: "Agent skill", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "Agent skill" })).toBeVisible();
+  const skillDialog = page.getByRole("dialog", { name: "Agent skill" });
+  await expect(skillDialog).toBeVisible();
+  await expect(page.getByLabel("Close agent skill")).toBeFocused();
   await expect(page.getByText("Use the repository codec for every token operation.")).toBeVisible();
-  await page.getByLabel("Close agent skill").click();
+  await page.keyboard.press("Escape");
+  await expect(skillDialog).toBeHidden();
+  await expect(page.getByRole("button", { name: "Agent skill", exact: true })).toBeFocused();
 
   const iconOffset = await page.locator(".theme-action-icon").evaluate((slot) => {
     const icon = [...slot.querySelectorAll("svg")].find((candidate) => getComputedStyle(candidate).display !== "none");
@@ -233,6 +239,30 @@ test("finds major cities that map to canonical IANA zones", async ({ page }) => 
   await expect(timeZone).toHaveValue("America/New_York");
 });
 
+test("applies participant weekday hours in the display time zone", async ({ page }) => {
+  await page.goto("./");
+  const organizerZone = page.getByRole("combobox", { name: "Organizer time zone" });
+  await organizerZone.fill("Shanghai");
+  await page.getByRole("option", { name: /Asia\/Shanghai/u }).click();
+  await page.getByRole("button", { name: "Create meeting link" }).click();
+  const baseToken = await page.locator(".output-copy code").textContent();
+
+  await page.goto(`./#/${baseToken}`);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Share when you are free" })).toBeVisible();
+  const displayZone = page.getByRole("combobox", { name: "Display time zone" });
+  await displayZone.fill("Los Angeles");
+  await page.getByRole("option", { name: /America\/Los Angeles/u }).click();
+  await page.getByRole("button", { name: "Mark weekday hours free" }).click();
+
+  const markedTimes = await page.locator(".marked-free").evaluateAll((slots) =>
+    slots.map((slot) => slot.getAttribute("title")?.slice(0, 5)));
+  expect(markedTimes).toContain("08:00");
+  expect(markedTimes).toContain("19:45");
+  expect(markedTimes).not.toContain("07:45");
+  expect(markedTimes).not.toContain("20:00");
+});
+
 test("renders the organizer time zone as one unified control", async ({ page }) => {
   await page.goto("./");
   const input = page.getByRole("combobox", { name: "Organizer time zone" });
@@ -272,6 +302,56 @@ test("customizes weekday hours and guards an inverted range", async ({ page }) =
   expect(await page.locator(".marked-unavailable").count()).toBeGreaterThan(0);
 });
 
+test("keeps organizer edits canonical after generation", async ({ page }) => {
+  await page.goto("./");
+  const firstSlot = page.locator('[data-slot-index="0"]');
+  await firstSlot.click();
+  await page.getByRole("button", { name: "Create meeting link" }).click();
+  const firstToken = await page.locator(".output-copy code").textContent();
+
+  await firstSlot.click();
+  await expect(firstSlot).not.toHaveClass(/marked-unavailable/u);
+  await expect(firstSlot).toHaveAttribute("title", /Available$/u);
+  await page.getByRole("button", { name: "Create meeting link" }).click();
+  const secondToken = await page.locator(".output-copy code").textContent();
+  expect(secondToken).not.toBe(firstToken);
+
+  const startDate = page.locator('input[type="date"]');
+  const validDate = await startDate.inputValue();
+  await startDate.fill("");
+  await expect(page.getByText(/valid ISO 8601 string|invalid/i)).toBeVisible();
+  await expect(startDate).toHaveValue(validDate);
+});
+
+test("supports pointer drag and roving keyboard selection", async ({ page }) => {
+  await page.goto("./");
+  const first = page.locator('[data-slot-index="0"]');
+  const second = page.locator('[data-slot-index="1"]');
+  const firstBox = await first.boundingBox();
+  const secondBox = await second.boundingBox();
+  expect(firstBox).not.toBeNull();
+  expect(secondBox).not.toBeNull();
+
+  if ((await page.viewportSize())!.width <= 780) {
+    await first.click();
+    await second.click();
+  } else {
+    await page.mouse.move(firstBox!.x + firstBox!.width / 2, firstBox!.y + firstBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(secondBox!.x + secondBox!.width / 2, secondBox!.y + secondBox!.height / 2);
+    await page.mouse.up();
+  }
+  await expect(first).toHaveClass(/marked-unavailable/u);
+  await expect(second).toHaveClass(/marked-unavailable/u);
+
+  expect(await page.locator('.time-slot[tabindex="0"]').count()).toBe(1);
+  await first.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(second).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(second).not.toHaveClass(/marked-unavailable/u);
+});
+
 test("fits a two-week grid without horizontal scrolling and shows the full day", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === "mobile", "desktop grid compression check");
   await page.goto("./");
@@ -299,6 +379,6 @@ test("keeps the product controls usable on a narrow viewport", async ({ page }, 
   await page.goto("./");
   await expect(page.getByRole("heading", { name: /Shared time/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open tokens" })).toBeVisible();
-  await expect(page.getByText("Create a meeting · mark organizer conflicts")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Define the meeting window" })).toBeVisible();
   await expect(page.getByTestId("calendar-grid")).toBeVisible();
 });

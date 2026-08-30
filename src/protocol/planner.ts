@@ -54,12 +54,15 @@ export function findCandidateWindows(
   const sorted = candidates.sort(
     (left, right) => right.attendeeCount - left.attendeeCount || left.startSlot - right.startSlot,
   );
-  const dayKey = (candidate: CandidateWindow) => new Intl.DateTimeFormat("en-CA", {
+  const dayFormatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: base.timezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date((base.startEpochMinutes + candidate.startSlot * base.slotMinutes) * 60_000));
+  });
+  const dayKey = (candidate: CandidateWindow) => dayFormatter.format(
+    new Date((base.startEpochMinutes + candidate.startSlot * base.slotMinutes) * 60_000),
+  );
   const ranked: CandidateWindow[] = [];
   const seenDays = new Set<string>();
   const attendanceLevels = [...new Set(sorted.map((candidate) => candidate.attendeeCount))];

@@ -1,5 +1,5 @@
 import { Check, Copy, DownloadSimple, X } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type SkillDrawerProps = {
   open: boolean;
@@ -9,7 +9,14 @@ type SkillDrawerProps = {
 
 export function SkillDrawer({ open, onClose, skillText }: SkillDrawerProps) {
   const [copied, setCopied] = useState(false);
-  if (!open) return null;
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
 
   const copySkill = async () => {
     await navigator.clipboard.writeText(skillText);
@@ -27,14 +34,16 @@ export function SkillDrawer({ open, onClose, skillText }: SkillDrawerProps) {
   };
 
   return (
-    <div className="drawer-backdrop" onMouseDown={onClose} role="presentation">
-      <aside
-        aria-label="Agent skill"
-        aria-modal="true"
-        className="skill-drawer"
-        onMouseDown={(event) => event.stopPropagation()}
-        role="dialog"
-      >
+    <dialog
+      aria-label="Agent skill"
+      className="skill-drawer"
+      onCancel={onClose}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+      ref={dialogRef}
+    >
+      <div className="skill-drawer-content">
         <header>
           <div>
             <span>Agent-ready workflow</span>
@@ -56,7 +65,7 @@ export function SkillDrawer({ open, onClose, skillText }: SkillDrawerProps) {
           </button>
         </div>
         <pre className="skill-preview"><code>{skillText}</code></pre>
-      </aside>
-    </div>
+      </div>
+    </dialog>
   );
 }

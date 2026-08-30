@@ -10,7 +10,10 @@ This file is the operating map for agents working in this repository. Keep produ
 - `src/protocol/codec.ts`: the only maintained base and participant binary codec.
 - `src/protocol/time.ts`: DST-safe absolute frame creation, IANA-zone display, range mapping, and work-hour presets.
 - `src/protocol/planner.ts`: visualization-neutral slot scores and continuous-window ranking.
+- `src/timezones/catalog.ts`: canonical IANA options, major-city aliases, and search ranking.
+- `src/calendar/alignDays.ts`: shared wall-clock rows for partial and DST display days.
 - `src/components/CalendarGrid.tsx`: drag and keyboard allocation editor plus overlap heatmap.
+- `src/useTheme.ts` and `src/themeReveal.ts`: system-aware theme state and manual radial reveal.
 - `src/App.tsx`: browser-local workflow state and token composition.
 - `skills/plan-time-with-tokens/`: reusable agent workflow, deterministic CLI, and Token v2 reference.
 - `tests/`: protocol, planner, and Playwright behavior.

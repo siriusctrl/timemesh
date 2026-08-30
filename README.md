@@ -1,46 +1,30 @@
 # TimeMesh
 
-A backend-free, token-first tool for exchanging availability and finding shared time across time zones.
+TimeMesh exchanges availability and finds shared meeting times with portable tokens. It has no accounts, database, API, or synchronization service: the static app edits, validates, and compares data carried by the tokens themselves.
 
 **Public app:** <https://siriusctrl.github.io/timemesh/>
 
-```text
-Organizer constraints
-  -> reversible tm2b_ base token
-  -> independent tm2p_ participant tokens
-  -> browser-local overlap planner
-```
-
-TimeMesh has no accounts, database, API, or synchronization service. The token is the portable data. The static page is an editor, decoder, validator, and planner for that data.
-
-## What the MVP proves
-
-- A base token can encode a one-month-or-shorter absolute time frame, an IANA time zone, a 15-minute default grid, meeting duration, and organizer unavailability.
-- A participant token encodes only a base fingerprint, slot count, and compressed free-time bitmap. It does not repeat the organizer's availability.
-- Tokens are deterministic and reversible. The same canonical allocation produces the same token, and a checksum rejects damaged input.
-- Multiple participant tokens can be composed after one base token and ranked without a server.
-- The same slot is displayed correctly in a different IANA time zone, including daylight-saving boundaries.
-- An AI agent can generate and validate tokens through a project-local skill and deterministic CLI instead of reproducing the binary codec.
-- The app can deploy as a Vite static build on GitHub Pages.
-
-## Product workflow
+## How it works
 
 ### Create a meeting
 
-1. Choose the date window, organizer time zone, meeting duration, and slot size. Time zones can be found by IANA name or major-city aliases such as San Francisco and Miami; the stored value remains canonical. The default grid is 15 minutes and the maximum window is 31 local calendar days.
-2. Mark organizer-unavailable slots. The editable weekday-hours preset defaults to 08:00-20:00 and blocks nights and weekends in one action.
-3. Create the meeting link and use **Copy URL**. The URL carries the `tm2b_...` meeting token in its fragment.
+1. Choose a date window, organizer time zone, grid size, and meeting duration. The default window is 14 days and the maximum is 31 local calendar days.
+2. Mark organizer conflicts. The weekday-hours shortcut is editable and defaults to 08:00–20:00; applying it keeps those weekday hours open and blocks the rest.
+3. Select **Create meeting link**, then **Copy URL**. The URL contains a `tm2b_...` meeting token in its fragment.
 
-### Respond to a meeting
+Time-zone fields accept canonical IANA names and major-city searches such as San Francisco or Miami. Tokens always store the canonical IANA zone.
 
-1. Paste or open the base token.
-2. TimeMesh reconstructs the absolute frame and displays it in the participant's time zone.
-3. Mark free slots and generate a `tm2p_...` response.
-4. Use **Copy URL** and send the response URL back to the organizer. It carries both the meeting token and the dependent response token, so it opens directly without a backend.
+### Respond
+
+1. Open the meeting URL. TimeMesh reconstructs the same absolute slots in your display time zone.
+2. Mark every free slot, or edit and apply the weekday-hours shortcut.
+3. Select **Generate response**, then **Copy URL**, and send that URL back to the organizer.
+
+The response URL contains both the meeting token and its dependent `tm2p_...` response token. Opening it goes directly to comparison; no response is sent or stored automatically.
 
 ### Compare responses
 
-Opening a response URL loads the meeting and that response directly into the comparison view. To compare several people, paste one meeting token followed by any number of response tokens:
+Open a response URL, or paste one meeting token followed by one or more response tokens:
 
 ```text
 tm2b_...
@@ -48,24 +32,44 @@ tm2p_...
 tm2p_...
 ```
 
-The browser validates every base reference, computes an overlap heatmap, and ranks continuous windows for the configured meeting duration.
+TimeMesh validates each response against the meeting, displays an overlap heatmap, and ranks continuous windows long enough for the configured meeting duration.
+
+## Product boundaries
+
+- `tm2b_` stores the absolute frame, grid and meeting duration, organizer IANA time zone, and compressed organizer-unavailable bitmap.
+- `tm2p_` stores a base fingerprint, slot count, and compressed participant-free bitmap. It is valid only with the exact meeting token used to create it.
+- Tokens are deterministic, reversible, and protected against accidental corruption by a checksum. They are not encrypted or access-controlled.
+- Calendar selections, imported tokens, and comparison results stay in browser memory. Only an explicit light/dark override is stored locally; otherwise the interface follows the system theme. Manual switches use a motion-aware radial reveal.
+- The app is a static Vite build under `/timemesh/` and has no runtime network dependency.
+- Agents use the checked-in CLI for encoding and round-trip validation instead of reproducing binary encoding manually.
+
+## URL forms
+
+```text
+https://siriusctrl.github.io/timemesh/t/<meeting-token>
+https://siriusctrl.github.io/timemesh/#/<meeting-token>
+https://siriusctrl.github.io/timemesh/#/<meeting-token>/<response-token>
+```
+
+The path form sends its token to the static host as part of the HTTP request. **Copy URL** uses fragments, which stay out of that request but can still be retained by browser history, chat history, clipboard managers, screenshots, and recipients. A fragment is request-private, not secret.
 
 ## Repository map
 
 ```text
 timemesh/
-├── src/
-│   ├── protocol/                   # canonical codec, time frame, bitset and planner
-│   ├── components/                 # token console, calendar grid and planner surfaces
-│   └── App.tsx                     # browser-local product workflow
-├── skills/plan-time-with-tokens/  # reusable agent workflow, CLI and protocol reference
-├── docs/                           # durable product and protocol decisions
-├── tests/                          # codec, planner and Playwright behavior
-├── scripts/                        # visual verification proof
-└── .github/workflows/pages.yml    # verified GitHub Pages deployment
+├── src/protocol/                  # canonical codec, time frame, bitsets, planner
+├── src/calendar/                  # cross-zone and DST-safe calendar row layout
+├── src/timezones/                 # IANA catalog and major-city search
+├── src/components/                # focused product surfaces
+├── src/App.tsx                    # browser-local workflow coordinator
+├── src/useTheme.ts                # system theme state and manual override
+├── skills/plan-time-with-tokens/ # agent workflow, CLI, protocol reference
+├── docs/                          # durable architecture decisions
+├── tests/                         # protocol, planner, and browser behavior
+└── scripts/                       # skill and visual verification
 ```
 
-`src/protocol/codec.ts` is the only maintained binary Token v2 implementation. The web app and the skill CLI both import it.
+`src/protocol/codec.ts` is the only maintained Token v2 codec. The web app and skill CLI both import it.
 
 ## Local development
 
@@ -76,11 +80,9 @@ npm install
 npm run dev
 ```
 
-The production build uses `/timemesh/` as its GitHub Pages base path.
+## Token CLI
 
-## Deterministic token CLI
-
-Create a base with explicit unavailable ranges:
+Create a meeting token from explicit unavailable ranges:
 
 ```sh
 npm run token -- base \
@@ -91,7 +93,7 @@ npm run token -- base \
   --unavailable-json availability/unavailable.json
 ```
 
-Create a participant response:
+Create a response token:
 
 ```sh
 npm run token -- participant \
@@ -99,7 +101,7 @@ npm run token -- participant \
   --free-json availability/free.json
 ```
 
-Range files contain explicit absolute or bracketed IANA-zone boundaries:
+Range files use inclusive starts and exclusive ends. Each boundary must include an offset or bracketed IANA zone:
 
 ```json
 {
@@ -112,27 +114,16 @@ Range files contain explicit absolute or bracketed IANA-zone boundaries:
 }
 ```
 
-Validate and inspect a token:
+Validate or inspect tokens:
 
 ```sh
 npm run token -- validate 'tm2b_...'
 npm run token -- decode 'tm2b_...'
 npm run token -- validate 'tm2p_...' --base 'tm2b_...'
+npm run token -- decode 'tm2p_...' --base 'tm2b_...'
 ```
 
-The CLI writes the generated token to stdout and its human-readable summary to stderr, which makes command substitution and pipelines predictable.
-
-## URL forms
-
-The static app accepts a single meeting token in a path or fragment, and a meeting-plus-response bundle in a fragment:
-
-```text
-https://siriusctrl.github.io/timemesh/t/<token>
-https://siriusctrl.github.io/timemesh/#/<token>
-https://siriusctrl.github.io/timemesh/#/<base-token>/<response-token>
-```
-
-The path form is easier to read but sends the token path to GitHub's hosting infrastructure. **Copy URL** uses the fragment form, which keeps tokens out of the HTTP request but does not make them secret. Neither form creates a TimeMesh backend or automatically sends a response to the organizer.
+Generation writes the token to stdout and a readable summary to stderr.
 
 ## Verification
 
@@ -143,28 +134,6 @@ npm run verify:ui
 npm run verify:proof
 ```
 
-`verify:proof` writes desktop, dark-mode, mobile, and interaction screenshots plus a contact sheet under `artifacts/verification/`. These files are local and ignored by Git.
+`verify:proof` writes ignored screenshots and a contact sheet under `artifacts/verification/`.
 
-## Current scope
-
-Implemented in the kickoff MVP:
-
-- Token v2 base and participant codecs with canonical bitmap compression;
-- CRC32 corruption detection and SHA-256 base binding;
-- 15/30/60-minute grids with a 15-minute default;
-- maximum 31-day local window with DST-safe absolute slots;
-- browser-local drag selection, token restoration, response generation, overlap heatmap, and ranked meeting windows;
-- responsive light and dark interfaces that follow the system theme by default and use a motion-aware radial reveal for manual switches;
-- project-local Agent Skill and deterministic CLI;
-- GitHub Pages workflow and deep-link fallback.
-
-Deferred:
-
-- direct Google, Apple, or Outlook calendar integrations;
-- encrypted tokens and passphrase management;
-- recurring availability rules;
-- participant names inside canonical tokens;
-- automatic token collection, messaging, or event creation;
-- accounts, persistence, authentication, or a backend.
-
-See [architecture decisions](docs/architecture-decisions.md) and the [Token v2 protocol](skills/plan-time-with-tokens/references/protocol-v2.md) for the durable boundaries.
+See [architecture decisions](docs/architecture-decisions.md), the [Agent Skill](skills/plan-time-with-tokens/SKILL.md), and the [Token v2 protocol](skills/plan-time-with-tokens/references/protocol-v2.md).

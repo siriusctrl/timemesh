@@ -18,7 +18,6 @@ type FramePanelProps = {
   onClear: () => void;
   frameDisabled?: boolean;
   participantView?: boolean;
-  selectionDisabled?: boolean;
 };
 
 export function FramePanel({
@@ -28,7 +27,6 @@ export function FramePanel({
   onClear,
   frameDisabled = false,
   participantView = false,
-  selectionDisabled = false,
 }: FramePanelProps) {
   const [workdayStart, setWorkdayStart] = useState("08:00");
   const [workdayEnd, setWorkdayEnd] = useState("20:00");
@@ -49,10 +47,7 @@ export function FramePanel({
   return (
     <aside className="frame-panel">
       <div className="panel-heading">
-        <div>
-          <span>{participantView ? "Meeting details" : "Organizer setup"}</span>
-          <h2>{participantView ? "Share when you are free" : "Define the meeting window"}</h2>
-        </div>
+        <h2>{participantView ? "Share when you are free" : "Define the meeting window"}</h2>
         <Clock aria-hidden="true" size={23} />
       </div>
       <div className="field-grid">
@@ -133,7 +128,7 @@ export function FramePanel({
         </div>
         {invalidWorkHours ? <p role="alert">Choose an end time later than the start.</p> : null}
         <button
-          disabled={selectionDisabled || invalidWorkHours}
+          disabled={invalidWorkHours}
           onClick={() => onApplyWorkHours(startMinute, endMinute)}
           type="button"
         >
@@ -141,7 +136,7 @@ export function FramePanel({
         </button>
       </div>
       <div className="preset-actions">
-        <button disabled={selectionDisabled} onClick={onClear} type="button">
+        <button onClick={onClear} type="button">
           <ArrowCounterClockwise aria-hidden="true" size={16} />
           Clear marks
         </button>

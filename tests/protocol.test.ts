@@ -125,9 +125,10 @@ describe("TimeMesh Token v2", () => {
     });
     const baseToken = encodeBaseToken(base);
     const participant = await encodeParticipantToken(baseToken, base, [12, 13, 14]);
-    const bundle = await decodeTokenBundle(`${baseToken}\n${participant}`);
+    const bundle = await decodeTokenBundle(`${baseToken}\n${participant}\n${participant}`);
     expect(bundle.base.timezone).toBe("Asia/Tokyo");
     expect(bundle.participants).toHaveLength(1);
+    expect(bundle.participantTokens).toEqual([participant]);
   });
 
   test("compresses a regular two-week schedule and round-trips its canonical bitmap", async () => {

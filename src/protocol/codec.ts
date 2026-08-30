@@ -198,8 +198,8 @@ function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
 
 export async function decodeParticipantToken(
   token: string,
-  baseToken?: string,
-  base?: BaseAllocation,
+  baseToken: string,
+  base: BaseAllocation,
 ): Promise<ParticipantAllocation> {
   const payload = decodeCheckedPayload(token, PARTICIPANT_TOKEN_PREFIX);
   const bitmapOffset = BASE_REF_BYTES + PARTICIPANT_SLOT_COUNT_BYTES;
@@ -214,19 +214,14 @@ export async function decodeParticipantToken(
     baseRef: payload.slice(0, BASE_REF_BYTES),
     free: decodeBitsetV2(payload.subarray(bitmapOffset), slotCount),
   };
-  if (baseToken || base) {
-    if (!baseToken || !base) {
-      throw new TokenError("missing_base", "Both the base token and decoded base are required.");
-    }
-    const expectedRef = await getBaseRef(baseToken);
-    if (!equalBytes(expectedRef, participant.baseRef)) {
-      throw new TokenError("base_mismatch", "Participant token belongs to a different base allocation.");
-    }
-    if (slotCount !== base.slotCount) {
-      throw new TokenError("base_mismatch", "Participant slot count does not match its base allocation.");
-    }
-    assertCanonicalBitset(participant.free, base.slotCount);
+  const expectedRef = await getBaseRef(baseToken);
+  if (!equalBytes(expectedRef, participant.baseRef)) {
+    throw new TokenError("base_mismatch", "Participant token belongs to a different base allocation.");
   }
+  if (slotCount !== base.slotCount) {
+    throw new TokenError("base_mismatch", "Participant slot count does not match its base allocation.");
+  }
+  assertCanonicalBitset(participant.free, base.slotCount);
   return participant;
 }
 
@@ -245,7 +240,9 @@ export async function decodeTokenBundle(input: string): Promise<TokenBundle> {
   }
   const baseToken = baseTokens[0];
   const base = decodeBaseToken(baseToken);
-  const participantTokens = tokens.filter((token) => token.startsWith(PARTICIPANT_TOKEN_PREFIX));
+  const participantTokens = [...new Set(
+    tokens.filter((token) => token.startsWith(PARTICIPANT_TOKEN_PREFIX)),
+  )];
   const participants = await Promise.all(
     participantTokens.map((participantToken) => decodeParticipantToken(participantToken, baseToken, base)),
   );

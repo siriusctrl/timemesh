@@ -1,40 +1,39 @@
 ---
 name: plan-time-with-tokens
-description: Generate, decode, validate, and combine TimeMesh tm2b_ base tokens and tm2p_ participant availability tokens from natural-language schedules, calendar exports, or explicit time ranges. Use when an agent must turn organizer constraints or participant free time into a deterministic backend-free token, verify a TimeMesh token, explain its dates in an IANA time zone, or find shared meeting windows from one base plus multiple responses.
+description: Generate, decode, and validate TimeMesh tm2b_ meeting tokens and tm2p_ participant response tokens from schedules or explicit time ranges. Use when an agent must encode organizer constraints or participant free time, inspect a TimeMesh token in an IANA time zone, or prepare a validated token bundle for comparison in TimeMesh.
 ---
 
 # Plan Time with Tokens
 
-Use the repository codec for every token operation. Never hand-encode or repair binary payloads.
+Use the repository codec for every token operation. Never hand-encode, repair, or shorten a binary payload.
 
-## Required resources
+## Resources
 
-- Use `scripts/time-token.ts` for generation, decoding, and validation.
-- Read `references/protocol-v2.md` only when reviewing an integration, debugging a rejected token, or implementing another compatible codec.
+- Run `scripts/time-token.ts` for generation, decoding, and validation.
+- Read `references/protocol-v2.md` only to review an integration, diagnose a rejected token, or implement a compatible codec.
 
-If this skill was pasted without its repository, clone `https://github.com/siriusctrl/timemesh.git` into a temporary directory and run `npm ci` there. Do not send calendar data to a remote service.
+If the repository is unavailable, clone `https://github.com/siriusctrl/timemesh.git` into a temporary directory and run `npm ci`. Keep calendar data local.
 
 ## Workflow
 
-1. Identify the requested token kind.
-   - Create `tm2b_` for an organizer's frame and unavailable time.
-   - Create `tm2p_` for a participant's free time against an existing base.
-   - Validate or decode when the user supplies tokens.
-   - Plan when the user supplies one base followed by participant tokens.
+1. Choose the operation.
+   - Create `tm2b_` for a meeting frame and organizer-unavailable time.
+   - Create `tm2p_` for participant-free time against an existing base.
+   - Decode or validate supplied tokens.
+   - Prepare one base followed by matching participant tokens for comparison in the TimeMesh app.
 
-2. Establish the time facts.
-   - Keep the default slot size at 15 minutes unless the user requests 30 or 60.
-   - Keep the date window at 31 local days or fewer.
-   - Require one IANA time zone such as `Asia/Shanghai`; do not accept `UTC+8` as identity.
-   - Ask before reading a local or connected calendar unless the user already authorized it.
-   - Extract only free/busy facts. Do not put event titles, attendees, locations, or notes into token input.
+2. Establish time facts.
+   - Default to 15-minute slots; supported alternatives are 30 and 60 minutes.
+   - Keep the window at 31 organizer-local calendar days or fewer.
+   - Use an IANA zone such as `Asia/Shanghai`, not a fixed offset such as `UTC+8`.
+   - Ask before reading a local or connected calendar unless the user already authorized access.
+   - Extract only free/busy facts. Exclude titles, attendees, locations, and notes.
 
-3. Create explicit ranges.
-   - Write a temporary JSON object with a `ranges` array.
-   - Use inclusive start and exclusive end.
-   - Give every boundary an offset or bracketed IANA time zone, for example `2026-09-02T09:00+08:00[Asia/Shanghai]`.
-   - For organizer input, ranges mean unavailable and any overlapping slot is blocked.
-   - For participant input, ranges mean free and only fully contained slots are selected.
+3. Write a temporary JSON object with a `ranges` array.
+   - Treat starts as inclusive and ends as exclusive.
+   - Give every boundary an offset or bracketed IANA zone, for example `2026-09-02T09:00+08:00[Asia/Shanghai]`.
+   - Organizer ranges mean unavailable; every overlapping slot is blocked.
+   - Participant ranges mean free; only fully contained slots are selected.
 
 4. Run the deterministic command from the TimeMesh repository root.
 
@@ -46,7 +45,7 @@ npm run token -- base --start YYYY-MM-DD --days 14 --timezone Area/City --meetin
 npm run token -- participant --base 'tm2b_...' --free-json /absolute/path/free.json
 ```
 
-5. Verify the result before returning it.
+5. Validate and decode the result.
 
 ```sh
 npm run token -- validate 'tm2b_...'
@@ -55,14 +54,14 @@ npm run token -- validate 'tm2p_...' --base 'tm2b_...'
 npm run token -- decode 'tm2p_...' --base 'tm2b_...'
 ```
 
-Compare the decoded range summary with the source schedule. Treat any mismatch as a failed generation and fix the range input rather than editing the token.
+Compare decoded ranges with the source schedule. On any mismatch, fix the range input and regenerate; never edit the token.
 
 6. Return a compact handoff.
    - Put the complete token on its own line.
-   - State token kind, date window, time zone, slot size, selected-slot count, and validation result.
-   - For participant output, state that the token is bound to the supplied base and does not repeat organizer availability.
-   - Do not print private calendar event details.
+   - State its kind, date window, time zone, slot size, selected-slot count, and validation result.
+   - For a response, state that it is bound to the supplied base.
+   - Do not expose calendar event details.
 
 ## Planning discipline
 
-Place the base first and participants after it. Reject any participant whose base fingerprint does not match. Do not infer participant identity from token order or availability. Labels may be kept outside canonical tokens for the current session only.
+Put exactly one base first and its participant tokens after it. Reject mismatched bases and de-duplicate identical participant tokens. Participant identity and labels remain outside canonical tokens.

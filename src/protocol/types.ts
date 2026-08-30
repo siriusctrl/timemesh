@@ -2,7 +2,6 @@ export const PROTOCOL_VERSION = 2 as const;
 export const BASE_TOKEN_PREFIX = "tm2b_";
 export const PARTICIPANT_TOKEN_PREFIX = "tm2p_";
 export const DEFAULT_SLOT_MINUTES = 15 as const;
-export const DEFAULT_WINDOW_DAYS = 14;
 export const MAX_WINDOW_DAYS = 31;
 export const MAX_SLOT_COUNT = MAX_WINDOW_DAYS * 24 * 4 + 8;
 
