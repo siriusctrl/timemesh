@@ -25,12 +25,10 @@ export function SkillDrawer({ open, onClose, skillText }: SkillDrawerProps) {
   };
 
   const downloadSkill = () => {
-    const url = URL.createObjectURL(new Blob([skillText], { type: "text/markdown" }));
     const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "SKILL.md";
+    anchor.href = `${import.meta.env.BASE_URL}plan-time-with-tokens.zip`;
+    anchor.download = "plan-time-with-tokens.zip";
     anchor.click();
-    URL.revokeObjectURL(url);
   };
 
   return (
@@ -53,7 +51,7 @@ export function SkillDrawer({ open, onClose, skillText }: SkillDrawerProps) {
             <X aria-hidden="true" size={20} />
           </button>
         </header>
-        <p>Paste this skill into an agent with access to the repository. It turns calendar facts into deterministic CLI inputs, then validates the resulting token.</p>
+        <p>Copy the workflow, or download the complete portable Skill with its local token tool. It can create responses and rank many response bundles without the app or a backend.</p>
         <div className="skill-actions">
           <button className="primary-action" onClick={copySkill} type="button">
             {copied ? <Check aria-hidden="true" size={17} /> : <Copy aria-hidden="true" size={17} />}
@@ -61,7 +59,7 @@ export function SkillDrawer({ open, onClose, skillText }: SkillDrawerProps) {
           </button>
           <button className="secondary-action" onClick={downloadSkill} type="button">
             <DownloadSimple aria-hidden="true" size={17} />
-            Download
+            Download package
           </button>
         </div>
         <pre className="skill-preview"><code>{skillText}</code></pre>

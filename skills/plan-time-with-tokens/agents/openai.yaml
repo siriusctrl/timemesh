@@ -1,4 +1,4 @@
 interface:
   display_name: "Plan Time with Tokens"
-  short_description: "Create or answer TimeMesh meetings locally"
-  default_prompt: "Use $plan-time-with-tokens to create a meeting or turn my availability and a supplied base token into a validated, complete response bundle."
+  short_description: "Create, answer, or compare TimeMesh tokens locally"
+  default_prompt: "Use $plan-time-with-tokens to create or answer a TimeMesh meeting, or rank candidate times from a base and collected response bundles with my preferences."

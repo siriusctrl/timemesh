@@ -164,7 +164,10 @@ test("opens the agent skill and switches appearance", async ({ page }) => {
   const skillDialog = page.getByRole("dialog", { name: "Agent skill" });
   await expect(skillDialog).toBeVisible();
   await expect(page.getByLabel("Close agent skill")).toBeFocused();
-  await expect(page.getByText("Use the repository codec for every token operation.")).toBeVisible();
+  await expect(page.getByText("Use the bundled deterministic tool for every token operation.")).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download package" }).click();
+  await expect((await downloadPromise).suggestedFilename()).toBe("plan-time-with-tokens.zip");
   await page.keyboard.press("Escape");
   await expect(skillDialog).toBeHidden();
   await expect(page.getByRole("button", { name: "Agent skill", exact: true })).toBeFocused();

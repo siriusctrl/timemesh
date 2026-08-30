@@ -50,7 +50,9 @@ Each bitmap is stored as raw bytes or alternating bit-run lengths, whichever is 
 
 Natural-language interpretation and calendar access vary by agent; binary encoding must not. Agents create explicit time ranges, call the checked-in CLI, inspect organizer conflicts, then decode the result for round-trip comparison. A participant handoff always includes the unchanged base followed by its dependent response token.
 
-The CLI and frontend both import `src/protocol/codec.ts`. The protocol reference supports review and compatible implementations; it is not a substitute for the CLI in agent workflows.
+The CLI source and frontend both import `src/protocol/codec.ts`. The Skill build bundles that source and its Temporal dependency into a self-contained Node.js executable, then packages the complete Skill for static download. The protocol reference supports review and compatible implementations; it is not a substitute for the CLI in agent workflows.
+
+Multi-response planning is also deterministic. Organizer-unavailable time and optional owner `allowedRanges` are hard constraints. `minimumAttendees` can filter candidates. Attendance ranks first, optional `preferredRanges` breaks attendance ties, and time breaks remaining ties. The tool exposes those fields and a ranked candidate set instead of claiming to infer an organizer's unstated preferences.
 
 ## 7. GitHub Pages hosts code, not planning state
 

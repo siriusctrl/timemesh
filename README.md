@@ -24,7 +24,7 @@ The response bundle and URL both contain the meeting token plus its dependent `t
 
 ### Compare responses
 
-Paste one meeting token followed by two or more response tokens:
+Paste one meeting token followed by two or more response tokens. You can also paste several complete response bundles; repeated copies of the same meeting token are normalized automatically:
 
 ```text
 tm2b_...
@@ -43,7 +43,7 @@ The compact token console stays available in every workspace. It recognizes a me
 - Tokens are deterministic, reversible, and protected against accidental corruption by a checksum. They are not encrypted or access-controlled.
 - Calendar selections, imported tokens, and comparison results stay in browser memory. Only an explicit light/dark override is stored locally; otherwise the interface follows the system theme. Manual switches use a motion-aware radial reveal.
 - The app is a static Vite build under `/timemesh/` and has no runtime network dependency.
-- Agents use the checked-in CLI for encoding, organizer-conflict reporting, and round-trip validation instead of reproducing binary encoding manually. The Agent Skill can create a meeting or turn natural-language availability plus a base token into a complete response bundle without opening the web app.
+- The downloadable Agent Skill includes a self-contained Node.js CLI for encoding, organizer-conflict reporting, round-trip validation, and multi-response ranking. It can create a meeting, turn natural-language availability plus a base token into a complete response bundle, or compare collected bundles without the repository, web app, or backend.
 
 ## URL forms
 
@@ -71,7 +71,7 @@ timemesh/
 └── scripts/                       # skill and visual verification
 ```
 
-`src/protocol/codec.ts` is the only maintained Token v2 codec. The web app and skill CLI both import it.
+`src/protocol/codec.ts` is the only maintained Token v2 codec. The web app imports it directly; `npm run skill:bundle` packages the same implementation into the portable Skill CLI and its downloadable zip.
 
 ## Local development
 
@@ -95,12 +95,13 @@ npm run token -- base \
   --unavailable-json availability/unavailable.json
 ```
 
-Create a response token:
+Create a complete response bundle:
 
 ```sh
 npm run token -- participant \
   --base 'tm2b_...' \
-  --free-json availability/free.json
+  --free-json availability/free.json \
+  --output bundle
 ```
 
 Range files use inclusive starts and exclusive ends. Each boundary must include an offset or bracketed IANA zone:
@@ -126,6 +127,17 @@ npm run token -- decode 'tm2p_...' --base 'tm2b_...'
 ```
 
 Generation writes the token to stdout and a readable summary to stderr. Participant summaries report requested free slots, accepted free slots, and any ranges excluded because the organizer is unavailable. A response handoff is the unchanged base token followed by the generated participant token.
+
+Compare collected response bundles:
+
+```sh
+npm run token -- compare \
+  --bundle-file availability/collected-bundles.txt \
+  --preferences-json availability/owner-preferences.json \
+  --timezone Asia/Shanghai
+```
+
+Preferences are optional and stay outside canonical tokens. `allowedRanges` and `minimumAttendees` are hard constraints; `preferredRanges` breaks ties only after attendance. The JSON result exposes candidate times, attendance counts, response numbers, and preference matches so the organizer makes the final choice. See the [Agent Skill](skills/plan-time-with-tokens/SKILL.md) for the input shape and portable command.
 
 ## Verification
 

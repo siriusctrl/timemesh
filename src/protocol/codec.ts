@@ -231,12 +231,14 @@ export function extractTokens(input: string): string[] {
 
 export async function decodeTokenBundle(input: string): Promise<TokenBundle> {
   const tokens = extractTokens(input);
-  const baseTokens = tokens.filter((token) => token.startsWith(BASE_TOKEN_PREFIX));
+  const baseTokens = [...new Set(
+    tokens.filter((token) => token.startsWith(BASE_TOKEN_PREFIX)),
+  )];
   if (baseTokens.length === 0) {
     throw new TokenError("missing_base", "Paste one base token before participant tokens.");
   }
   if (baseTokens.length > 1) {
-    throw new TokenError("invalid_contract", "A token bundle may contain exactly one base token.");
+    throw new TokenError("invalid_contract", "A token bundle may contain only one distinct base token.");
   }
   const baseToken = baseTokens[0];
   const base = decodeBaseToken(baseToken);

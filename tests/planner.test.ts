@@ -28,6 +28,7 @@ describe("overlap planner", () => {
     expect(best.startSlot).toBe(10);
     expect(best.endSlot).toBe(12);
     expect(best.attendeeCount).toBe(3);
+    expect(best.participantIndexes).toEqual([0, 1, 2]);
   });
 
   test("does not cross an organizer-unavailable slot", () => {
@@ -51,5 +52,59 @@ describe("overlap planner", () => {
     });
     const candidates = findCandidateWindows(base, [], 3);
     expect(candidates.map((candidate) => Math.floor(candidate.startSlot / 96))).toEqual([0, 1, 2]);
+  });
+
+  test("applies owner constraints and uses preferred time only as an attendance tie-break", () => {
+    const base = createBaseAllocation({
+      startDate: "2026-09-01",
+      days: 1,
+      timezone: "UTC",
+      meetingMinutes: 30,
+    });
+    const participant = (indices: number[]): ParticipantAllocation => ({
+      version: PROTOCOL_VERSION,
+      kind: "participant",
+      baseRef: new Uint8Array(8),
+      free: createBitset(base.slotCount, indices),
+    });
+    const participants = [
+      participant([40, 41, 48, 49]),
+      participant([40, 41]),
+    ];
+    const allowedSlots = new Set([40, 41, 48, 49]);
+    const preferredSlots = new Set([48, 49]);
+    const candidates = findCandidateWindows(base, participants, {
+      allowedSlots,
+      preferredSlots,
+      minimumAttendees: 1,
+      limit: 2,
+    });
+
+    expect(candidates.map((candidate) => candidate.startSlot)).toEqual([40, 48]);
+    expect(candidates.map((candidate) => candidate.attendeeCount)).toEqual([2, 1]);
+    expect(candidates[1].preferredSlotCount).toBe(2);
+  });
+
+  test("uses preferred slots to order windows with equal attendance", () => {
+    const base = createBaseAllocation({
+      startDate: "2026-09-01",
+      days: 1,
+      timezone: "UTC",
+      meetingMinutes: 30,
+    });
+    const participant: ParticipantAllocation = {
+      version: PROTOCOL_VERSION,
+      kind: "participant",
+      baseRef: new Uint8Array(8),
+      free: createBitset(base.slotCount, [40, 41, 48, 49]),
+    };
+    const [best] = findCandidateWindows(base, [participant], {
+      allowedSlots: new Set([40, 41, 48, 49]),
+      preferredSlots: new Set([48, 49]),
+      limit: 1,
+    });
+
+    expect(best.startSlot).toBe(48);
+    expect(best.preferredSlotCount).toBe(2);
   });
 });

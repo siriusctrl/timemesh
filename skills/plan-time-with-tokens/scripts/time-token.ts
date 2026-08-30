@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { bitsetToSet, countBits, createBitset, getBit } from "../../../src/protocol/bits";
+import { countBits, createBitset, getBit } from "../../../src/protocol/bits";
 import {
   baseRefLabel,
   decodeBaseToken,
   decodeParticipantToken,
+  decodeTokenBundle,
   encodeBaseToken,
   encodeParticipantToken,
 } from "../../../src/protocol/codec";
+import { findCandidateWindows } from "../../../src/protocol/planner";
 import {
   baseStartDate,
   baseWindowDays,
@@ -29,7 +31,8 @@ import {
 function usage(): never {
   console.error(`Usage:
   time-token base --start YYYY-MM-DD --days N --timezone Area/City [--slot 15] [--meeting 60] [--unavailable-json path]
-  time-token participant --base tm2b_... --free-json path
+  time-token participant --base tm2b_... --free-json path [--output token|bundle]
+  time-token compare --bundle-file path [--preferences-json path] [--timezone Area/City] [--limit 12]
   time-token validate TOKEN [--base tm2b_...]
   time-token decode TOKEN [--base tm2b_...]`);
   process.exit(2);
@@ -55,15 +58,18 @@ function required(args: Map<string, string>, name: string): string {
   return value;
 }
 
-async function readRanges(path: string): Promise<TimeRange[]> {
+async function readJson(path: string): Promise<{ absolute: string; value: unknown }> {
   const absolute = resolve(path);
-  const value = JSON.parse(await readFile(absolute, "utf8")) as unknown;
+  return { absolute, value: JSON.parse(await readFile(absolute, "utf8")) as unknown };
+}
+
+function parseRanges(value: unknown, label: string): TimeRange[] {
   const ranges = Array.isArray(value)
     ? value
     : typeof value === "object" && value !== null && Array.isArray((value as { ranges?: unknown }).ranges)
       ? (value as { ranges: unknown[] }).ranges
       : null;
-  if (!ranges) throw new Error(`${absolute} must contain a ranges array.`);
+  if (!ranges) throw new Error(`${label} must contain a ranges array.`);
   return ranges.map((item, index) => {
     if (
       typeof item !== "object" || item === null ||
@@ -74,6 +80,47 @@ async function readRanges(path: string): Promise<TimeRange[]> {
     }
     return { start: (item as TimeRange).start, end: (item as TimeRange).end };
   });
+}
+
+async function readRanges(path: string): Promise<TimeRange[]> {
+  const { absolute, value } = await readJson(path);
+  return parseRanges(value, absolute);
+}
+
+type OwnerPreferences = {
+  minimumAttendees?: number;
+  allowedRanges?: TimeRange[];
+  preferredRanges?: TimeRange[];
+};
+
+async function readPreferences(path: string): Promise<OwnerPreferences> {
+  const { absolute, value } = await readJson(path);
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${absolute} must contain a JSON object.`);
+  }
+  const input = value as Record<string, unknown>;
+  const minimumAttendees = input.minimumAttendees;
+  if (minimumAttendees !== undefined && (!Number.isInteger(minimumAttendees) || Number(minimumAttendees) < 0)) {
+    throw new Error("minimumAttendees must be a non-negative integer.");
+  }
+  return {
+    minimumAttendees: minimumAttendees as number | undefined,
+    allowedRanges: input.allowedRanges === undefined
+      ? undefined
+      : parseRanges(input.allowedRanges, "allowedRanges"),
+    preferredRanges: input.preferredRanges === undefined
+      ? undefined
+      : parseRanges(input.preferredRanges, "preferredRanges"),
+  };
+}
+
+function timeZoneOrThrow(value: string): string {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value }).format(0);
+    return value;
+  } catch {
+    throw new Error(`Unknown IANA time zone ${value}.`);
+  }
 }
 
 function selectedRanges(base: BaseAllocation, bitset: Uint8Array) {
@@ -140,7 +187,11 @@ try {
     const { free, conflicts } = excludeOrganizerConflicts(base, requestedFree);
     const token = await encodeParticipantToken(baseToken, base, free);
     const decoded = await decodeParticipantToken(token, baseToken, base);
-    console.log(token);
+    const output = args.get("output") ?? "token";
+    if (output !== "token" && output !== "bundle") {
+      throw new Error("--output must be token or bundle.");
+    }
+    console.log(output === "bundle" ? `${baseToken.trim()}\n${token}` : token);
     console.error(JSON.stringify({
       kind: decoded.kind,
       baseRef: baseRefLabel(decoded.baseRef),
@@ -152,6 +203,57 @@ try {
       freeRanges: selectedRanges(base, decoded.free),
       organizerConflictSlotCount: conflicts.size,
       organizerConflictRanges: selectedRanges(base, createBitset(base.slotCount, conflicts)),
+    }, null, 2));
+  } else if (command === "compare") {
+    const args = parseArgs(process.argv.slice(3));
+    const bundlePath = resolve(required(args, "bundle-file"));
+    const bundle = await decodeTokenBundle(await readFile(bundlePath, "utf8"));
+    const preferences = args.get("preferences-json")
+      ? await readPreferences(required(args, "preferences-json"))
+      : {};
+    if ((preferences.minimumAttendees ?? 0) > bundle.participants.length) {
+      throw new Error(`minimumAttendees cannot exceed the ${bundle.participants.length} unique responses in the bundle.`);
+    }
+    const limit = Number(args.get("limit") ?? 12);
+    if (!Number.isInteger(limit) || limit < 1) throw new Error("--limit must be a positive integer.");
+    const displayTimezone = timeZoneOrThrow(args.get("timezone") ?? bundle.base.timezone);
+    const allowedSlots = preferences.allowedRanges === undefined
+      ? undefined
+      : rangesToSlotSet(bundle.base, preferences.allowedRanges, "free");
+    const preferredSlots = preferences.preferredRanges === undefined
+      ? undefined
+      : rangesToSlotSet(bundle.base, preferences.preferredRanges, "free");
+    const candidates = findCandidateWindows(bundle.base, bundle.participants, {
+      limit,
+      minimumAttendees: preferences.minimumAttendees,
+      allowedSlots,
+      preferredSlots,
+      diversifyDays: false,
+    });
+    const durationSlots = bundle.base.meetingMinutes / bundle.base.slotMinutes;
+    console.log(JSON.stringify({
+      kind: "comparison",
+      base: baseSummary(bundle.base),
+      displayTimezone,
+      uniqueResponseCount: bundle.participants.length,
+      preferences,
+      rankingPolicy: [
+        "Organizer availability and allowedRanges are hard constraints.",
+        "minimumAttendees removes candidates below the requested attendance.",
+        "More available participants ranks first.",
+        "preferredRanges breaks ties without outranking attendance.",
+        "Earlier windows break remaining ties.",
+      ],
+      candidates: candidates.map((candidate, index) => ({
+        rank: index + 1,
+        start: slotInstant(bundle.base, candidate.startSlot).toZonedDateTimeISO(displayTimezone).toString(),
+        end: slotInstant(bundle.base, candidate.endSlot).toZonedDateTimeISO(displayTimezone).toString(),
+        attendeeCount: candidate.attendeeCount,
+        participantCount: candidate.participantCount,
+        responseNumbers: candidate.participantIndexes.map((participantIndex) => participantIndex + 1),
+        preferredSlotCount: candidate.preferredSlotCount,
+        fullyPreferred: preferredSlots !== undefined && candidate.preferredSlotCount === durationSlots,
+      })),
     }, null, 2));
   } else if (command === "validate" || command === "decode") {
     if (!tokenArgument) usage();

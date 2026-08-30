@@ -6,6 +6,16 @@ export type CandidateWindow = {
   endSlot: number;
   attendeeCount: number;
   participantCount: number;
+  participantIndexes: number[];
+  preferredSlotCount: number;
+};
+
+export type CandidateWindowOptions = {
+  limit?: number;
+  minimumAttendees?: number;
+  allowedSlots?: ReadonlySet<number>;
+  preferredSlots?: ReadonlySet<number>;
+  diversifyDays?: boolean;
 };
 
 export function availabilityScores(
@@ -24,36 +34,54 @@ export function availabilityScores(
 export function findCandidateWindows(
   base: BaseAllocation,
   participants: ParticipantAllocation[],
-  limit = 12,
+  optionsOrLimit: CandidateWindowOptions | number = {},
 ): CandidateWindow[] {
+  const options = typeof optionsOrLimit === "number"
+    ? { limit: optionsOrLimit }
+    : optionsOrLimit;
+  const limit = options.limit ?? 12;
+  const minimumAttendees = options.minimumAttendees ?? 0;
   const durationSlots = base.meetingMinutes / base.slotMinutes;
   const candidates: CandidateWindow[] = [];
   for (let startSlot = 0; startSlot <= base.slotCount - durationSlots; startSlot += 1) {
     const endSlot = startSlot + durationSlots;
     let hostAvailable = true;
     for (let index = startSlot; index < endSlot; index += 1) {
-      if (getBit(base.unavailable, index)) {
+      if (getBit(base.unavailable, index) || (options.allowedSlots && !options.allowedSlots.has(index))) {
         hostAvailable = false;
         break;
       }
     }
     if (!hostAvailable) continue;
-    const attendeeCount = participants.reduce((count, participant) => {
+    const participantIndexes = participants.reduce<number[]>((indexes, participant, participantIndex) => {
       for (let index = startSlot; index < endSlot; index += 1) {
-        if (!getBit(participant.free, index)) return count;
+        if (!getBit(participant.free, index)) return indexes;
       }
-      return count + 1;
-    }, 0);
+      indexes.push(participantIndex);
+      return indexes;
+    }, []);
+    const attendeeCount = participantIndexes.length;
+    if (attendeeCount < minimumAttendees) continue;
+    let preferredSlotCount = 0;
+    for (let index = startSlot; index < endSlot; index += 1) {
+      if (options.preferredSlots?.has(index)) preferredSlotCount += 1;
+    }
     candidates.push({
       startSlot,
       endSlot,
       attendeeCount,
       participantCount: participants.length,
+      participantIndexes,
+      preferredSlotCount,
     });
   }
   const sorted = candidates.sort(
-    (left, right) => right.attendeeCount - left.attendeeCount || left.startSlot - right.startSlot,
+    (left, right) =>
+      right.attendeeCount - left.attendeeCount ||
+      right.preferredSlotCount - left.preferredSlotCount ||
+      left.startSlot - right.startSlot,
   );
+  if (options.diversifyDays === false) return sorted.slice(0, limit);
   const dayFormatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: base.timezone,
     year: "numeric",

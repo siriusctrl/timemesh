@@ -1,18 +1,18 @@
 ---
 name: plan-time-with-tokens
-description: Create, answer, revise, decode, and validate TimeMesh meetings entirely through local tm2b_ and tm2p_ tokens. Use when an agent receives a TimeMesh base or response bundle, needs to turn natural-language availability into a validated response, explain organizer conflicts, create a meeting token, or prepare a complete bundle for interactive review or comparison.
+description: Create, answer, revise, decode, validate, and compare TimeMesh meetings entirely through local tm2b_ and tm2p_ tokens. Use when an agent receives a TimeMesh base or response bundle, needs to turn natural-language availability into a validated response, explain organizer conflicts, create a meeting token, or rank shared meeting windows with optional organizer preferences.
 ---
 
 # Plan Time with Tokens
 
-Use the repository codec for every token operation. Never hand-encode, repair, or shorten a binary payload.
+Use the bundled deterministic tool for every token operation. Never hand-encode, repair, or shorten a binary payload.
 
 ## Resources
 
-- Run `scripts/time-token.ts` for generation, decoding, and validation.
+- Run `node scripts/time-token.mjs` from this Skill directory for generation, decoding, validation, and comparison. It is self-contained and only requires Node.js 22 or newer.
 - Read `references/protocol-v2.md` only to review an integration, diagnose a rejected token, or implement a compatible codec.
 
-If the repository is unavailable, clone `https://github.com/siriusctrl/timemesh.git` into a temporary directory and run `npm ci`. Keep calendar data local.
+If only this Markdown file was pasted, download the complete portable package from `https://siriusctrl.github.io/timemesh/plan-time-with-tokens.zip` before running commands. Keep calendar data local.
 
 ## Start from the tokens
 
@@ -20,7 +20,7 @@ Extract every `tm2b_...` and `tm2p_...` value from the user's message before ask
 
 - With no base token, help create a meeting.
 - With one base and zero or one response, help create or revise that response.
-- With one base and multiple responses, validate the bundle and summarize shared windows.
+- With one base and multiple responses, validate the bundle and rank shared windows.
 - Reject multiple bases, participant tokens without their exact base, and mismatched participant tokens.
 
 Decode the base first. Tell the user its date window, organizer time zone, slot size, meeting duration, and organizer-unavailable ranges in a useful display time zone. If the user's time zone is missing and cannot be inferred safely, ask for it before interpreting phrases such as “Tuesday afternoon.”
@@ -52,26 +52,56 @@ The user can paste that bundle into TimeMesh to review and edit the response. Af
 - Organizer ranges mean unavailable; every overlapping slot is blocked.
 - Participant ranges mean free; only fully contained slots are selected.
 
-Write temporary input as a JSON object with a `ranges` array, then run the deterministic command from the TimeMesh repository root.
+Write temporary input as a JSON object with a `ranges` array, then run the bundled deterministic command from this Skill directory.
 
 ```sh
-npm run token -- base --start YYYY-MM-DD --days 14 --timezone Area/City --meeting 60 --unavailable-json /absolute/path/unavailable.json
+node scripts/time-token.mjs base --start YYYY-MM-DD --days 14 --timezone Area/City --meeting 60 --unavailable-json /absolute/path/unavailable.json
 ```
 
 ```sh
-npm run token -- participant --base 'tm2b_...' --free-json /absolute/path/free.json
+node scripts/time-token.mjs participant --base 'tm2b_...' --free-json /absolute/path/free.json --output bundle
 ```
 
 Validate and decode every result.
 
 ```sh
-npm run token -- validate 'tm2b_...'
-npm run token -- decode 'tm2b_...'
-npm run token -- validate 'tm2p_...' --base 'tm2b_...'
-npm run token -- decode 'tm2p_...' --base 'tm2b_...'
+node scripts/time-token.mjs validate 'tm2b_...'
+node scripts/time-token.mjs decode 'tm2b_...'
+node scripts/time-token.mjs validate 'tm2p_...' --base 'tm2b_...'
+node scripts/time-token.mjs decode 'tm2p_...' --base 'tm2b_...'
 ```
 
 Compare decoded ranges with the intended schedule. On any mismatch, fix the range input and regenerate; never edit the token.
+
+## Compare collected responses
+
+Put the collected response bundles in one text file. Repeated copies of the same base are normalized; distinct bases and mismatched responses are rejected. Run:
+
+```sh
+node scripts/time-token.mjs compare --bundle-file /absolute/path/bundles.txt --timezone Area/City
+```
+
+The JSON result lists ranked continuous windows, attendance counts, and the response numbers available for each one. Default ranking is transparent: organizer availability is required, more participants ranks first, and earlier times break remaining ties.
+
+Organizer preferences are optional. They belong in a separate JSON file so they do not alter canonical tokens:
+
+```json
+{
+  "minimumAttendees": 3,
+  "allowedRanges": [
+    { "start": "2026-09-02T08:00+08:00[Asia/Shanghai]", "end": "2026-09-02T20:00+08:00[Asia/Shanghai]" }
+  ],
+  "preferredRanges": [
+    { "start": "2026-09-02T10:00+08:00[Asia/Shanghai]", "end": "2026-09-02T12:00+08:00[Asia/Shanghai]" }
+  ]
+}
+```
+
+```sh
+node scripts/time-token.mjs compare --bundle-file /absolute/path/bundles.txt --preferences-json /absolute/path/preferences.json --timezone Area/City
+```
+
+`allowedRanges` and `minimumAttendees` are hard constraints. `preferredRanges` only breaks ties between windows with equal attendance; it never silently ranks fewer available people above more available people. Show the user the top candidates and scoring fields, then let the organizer choose. Do not claim that the first candidate captures preferences that were not supplied.
 
 ## Handoff
 
@@ -83,4 +113,4 @@ Compare decoded ranges with the intended schedule. On any mismatch, fix the rang
 
 ## Planning discipline
 
-Put exactly one base first and its participant tokens after it. De-duplicate identical participant tokens. Participant identity and labels remain outside canonical tokens. A single response remains editable; two or more responses form a comparison bundle.
+Normalize to one distinct base and its unique participant tokens. Participant identity and labels remain outside canonical tokens, so comparison results refer to responses by their one-based order. A single response remains editable; two or more responses form a comparison bundle.
