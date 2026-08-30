@@ -63,12 +63,13 @@ The CLI and frontend both import `src/protocol/codec.ts`. The protocol reference
 
 The Vite build uses `/timemesh/` and GitHub Pages serves only static assets. A custom `404.html` restores pretty deep routes.
 
-Two token URL forms are supported:
+Token URLs support both single-token meetings and self-contained response handoffs:
 
 - `/timemesh/t/<token>` is readable but the path reaches GitHub's hosting infrastructure.
-- `/timemesh/#/<token>` keeps the fragment out of HTTP requests and is the default generated private URL.
+- `/timemesh/#/<base-token>` opens the participant response view.
+- `/timemesh/#/<base-token>/<participant-token>` opens the organizer comparison view with that response loaded.
 
-Neither form makes availability secret after it has been shared. Browser history, chat history, clipboard managers, screenshots, and recipients can retain a token. Encryption needs a separate protocol version or envelope.
+The UI calls this action **Copy URL**, not a private URL. Fragments stay out of HTTP requests, but browser history, chat history, clipboard managers, screenshots, and recipients can retain them. Encryption needs a separate protocol version or envelope.
 
 ## 8. UI state is disposable
 

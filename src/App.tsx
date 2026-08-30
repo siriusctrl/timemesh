@@ -4,11 +4,11 @@ import {
   Copy,
   Eye,
   EyeSlash,
+  LinkSimple,
   Moon,
   Robot,
   ShieldCheck,
   Sun,
-  UsersThree,
 } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import agentSkill from "../skills/plan-time-with-tokens/SKILL.md?raw";
@@ -75,11 +75,11 @@ function errorMessage(error: unknown): string {
   return "The token could not be processed.";
 }
 
-function routeToken(): string | null {
-  const pathMatch = window.location.pathname.match(/\/t\/(tm2[bp]_[A-Za-z0-9_-]+)/u);
-  if (pathMatch) return pathMatch[1];
-  const hashMatch = window.location.hash.match(/^#\/?(tm2[bp]_[A-Za-z0-9_-]+)/u);
-  return hashMatch?.[1] ?? null;
+function routeTokenBundle(): string | null {
+  const pathTokens = extractTokens(window.location.pathname);
+  if (pathTokens.length > 0) return pathTokens.join("\n");
+  const hashTokens = extractTokens(window.location.hash);
+  return hashTokens.length > 0 ? hashTokens.join("\n") : null;
 }
 
 function safeTimeZone(candidate: string, fallback: string): string {
@@ -101,7 +101,6 @@ export default function App() {
   const [freeSlots, setFreeSlots] = useState<Set<number>>(new Set());
   const [baseToken, setBaseToken] = useState("");
   const [participantToken, setParticipantToken] = useState("");
-  const [participantTokens, setParticipantTokens] = useState<string[]>([]);
   const [participants, setParticipants] = useState<ParticipantAllocation[]>([]);
   const [tokenInput, setTokenInput] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -139,9 +138,8 @@ export default function App() {
     if (baseToken) {
       setBaseToken("");
       setParticipantToken("");
-      setParticipantTokens([]);
       setParticipants([]);
-      setNotice({ kind: "info", message: "Base availability changed. Generate a new base token before collecting responses." });
+      setNotice({ kind: "info", message: "Organizer availability changed. Create a new meeting link before collecting responses." });
     }
   };
 
@@ -158,7 +156,6 @@ export default function App() {
       setFreeSlots(new Set());
       setBaseToken("");
       setParticipantToken("");
-      setParticipantTokens([]);
       setParticipants([]);
       setNotice(null);
     } catch (error) {
@@ -201,7 +198,7 @@ export default function App() {
       setBaseToken(token);
       setParticipantToken("");
       setTokenInput(token);
-      setNotice({ kind: "success", message: "Base token generated and verified locally." });
+      setNotice({ kind: "success", message: "Meeting link created and verified locally." });
     } catch (error) {
       setNotice({ kind: "error", message: errorMessage(error) });
     }
@@ -215,7 +212,7 @@ export default function App() {
       await decodeParticipantToken(token, baseToken, base);
       setParticipantToken(token);
       setTokenInput(`${baseToken}\n${token}`);
-      setNotice({ kind: "success", message: "Participant token generated. It does not duplicate the base availability." });
+      setNotice({ kind: "success", message: "Response ready. Copy the URL and send it back to the organizer." });
     } catch (error) {
       setNotice({ kind: "error", message: errorMessage(error) });
     } finally {
@@ -244,7 +241,6 @@ export default function App() {
       });
       setBlockedSlots(bitsetToSet(bundle.base.unavailable, bundle.base.slotCount));
       setBaseToken(bundle.baseToken);
-      setParticipantTokens(uniqueParticipantTokens);
       setParticipants(uniqueParticipants);
       setParticipantToken("");
       setFreeSlots(new Set());
@@ -253,8 +249,8 @@ export default function App() {
       setNotice({
         kind: "success",
         message: uniqueParticipants.length > 0
-          ? `Loaded one base and ${uniqueParticipants.length} participant token${uniqueParticipants.length === 1 ? "" : "s"}.`
-          : "Base token restored. Mark your free time without changing the base.",
+          ? `Loaded ${uniqueParticipants.length} response${uniqueParticipants.length === 1 ? "" : "s"} for comparison.`
+          : "Meeting opened. Mark every time that works for you.",
       });
     } catch (error) {
       const tokenError = error as TokenError;
@@ -265,23 +261,13 @@ export default function App() {
   };
 
   useEffect(() => {
-    const token = routeToken();
-    if (!token) return;
-    setTokenInput(token);
-    void openTokens(token);
+    const routedBundle = routeTokenBundle();
+    if (!routedBundle) return;
+    setTokenInput(routedBundle);
+    void openTokens(routedBundle);
     // Route tokens are consumed only once at startup.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const addResponseToPlan = async () => {
-    if (!participantToken || participantTokens.includes(participantToken)) return;
-    const decoded = await decodeParticipantToken(participantToken, baseToken, base);
-    const nextTokens = [...participantTokens, participantToken];
-    setParticipantTokens(nextTokens);
-    setParticipants([...participants, decoded]);
-    setTokenInput([baseToken, ...nextTokens].join("\n"));
-    setMode("plan");
-  };
 
   const copyText = async (value: string, type: "token" | "url") => {
     await navigator.clipboard.writeText(value);
@@ -290,8 +276,11 @@ export default function App() {
   };
 
   const outputToken = mode === "base" ? baseToken : mode === "respond" ? participantToken : "";
-  const privateUrl = outputToken
-    ? `${window.location.origin}${import.meta.env.BASE_URL}#/${outputToken}`
+  const urlTokenBundle = mode === "respond" && participantToken
+    ? `${baseToken}/${participantToken}`
+    : outputToken;
+  const shareUrl = urlTokenBundle
+    ? `${window.location.origin}${import.meta.env.BASE_URL}#/${urlTokenBundle}`
     : "";
   const activeSelection = mode === "base" ? blockedSlots : freeSlots;
   const selectedCount = mode === "base"
@@ -331,29 +320,20 @@ export default function App() {
       </header>
 
       <main>
-        <section className="command-strip">
-          <TokenConsole
-            busy={busy}
-            notice={notice}
-            onChange={setTokenInput}
-            onDecode={() => void openTokens()}
-            value={tokenInput}
-          />
-        </section>
+        {mode !== "respond" ? (
+          <section className="command-strip">
+            <TokenConsole
+              busy={busy}
+              notice={notice}
+              onChange={setTokenInput}
+              onDecode={() => void openTokens()}
+              value={tokenInput}
+            />
+          </section>
+        ) : null}
 
         <section className="workspace" aria-label="Time allocation workspace">
-          <div className="workspace-bar">
-            <div className="mode-switcher" aria-label="Workspace mode" role="tablist">
-              <button aria-selected={mode === "base"} onClick={() => setMode("base")} role="tab" type="button">
-                Base
-              </button>
-              <button aria-selected={mode === "respond"} disabled={!baseToken} onClick={() => setMode("respond")} role="tab" type="button">
-                Availability
-              </button>
-              <button aria-selected={mode === "plan"} disabled={!baseToken} onClick={() => setMode("plan")} role="tab" type="button">
-                Plan <span>{participants.length}</span>
-              </button>
-            </div>
+          <div className="workspace-bar workspace-bar-controls">
             <div className="view-controls">
               <TimeZoneSelect
                 ariaLabel="Display time zone"
@@ -371,13 +351,20 @@ export default function App() {
 
           <div className="workspace-summary">
             <div>
-              <span>{mode === "base" ? "Mark unavailable" : mode === "respond" ? "Mark when you are free" : "Overlap heatmap"}</span>
+              <span>{mode === "base"
+                ? "Create a meeting · mark organizer conflicts"
+                : mode === "respond"
+                  ? "Your response · mark every time that works"
+                  : `Compare ${participants.length} response${participants.length === 1 ? "" : "s"}`}</span>
               <strong>{describeBaseRange(base, effectiveDisplayTimezone)}</strong>
             </div>
             <dl>
               <div><dt>Grid</dt><dd>{base.slotMinutes}m</dd></div>
               <div><dt>{mode === "base" ? "Blocked" : mode === "respond" ? "Free" : "Open"}</dt><dd>{selectedCount}</dd></div>
-              <div><dt>Responses</dt><dd>{participants.length}</dd></div>
+              <div>
+                <dt>{mode === "respond" ? "Meeting" : "Responses"}</dt>
+                <dd>{mode === "respond" ? `${base.meetingMinutes}m` : participants.length}</dd>
+              </div>
             </dl>
           </div>
 
@@ -390,6 +377,7 @@ export default function App() {
                 onApplyWorkHours={applyWorkHours}
                 onChange={updateSettings}
                 onClear={clearSelection}
+                participantView={mode === "respond"}
                 settings={settings}
               />
             )}
@@ -424,17 +412,22 @@ export default function App() {
             <div className="output-copy">
               <BracketsCurly aria-hidden="true" size={21} />
               <div>
-                <span>{mode === "base" ? "Base token" : mode === "respond" ? "Participant token" : "Planning bundle"}</span>
+                <span>{mode === "base" ? "Meeting link" : mode === "respond" ? "Your response" : "Responses being compared"}</span>
                 <code>
                   {mode === "plan"
                     ? `${BASE_TOKEN_PREFIX}... + ${participants.length} ${PARTICIPANT_TOKEN_PREFIX}...`
                     : outputToken || "Generate when the allocation is ready"}
                 </code>
+                {mode === "respond" && participantToken ? (
+                  <small role="status">Copy the URL and send it back to the organizer.</small>
+                ) : mode === "respond" && notice?.kind === "error" ? (
+                  <small className="output-error" role="status">{notice.message}</small>
+                ) : null}
               </div>
             </div>
             <div className="output-actions">
               {mode === "base" ? (
-                <button className="primary-action" onClick={generateBase} type="button">Generate base</button>
+                <button className="primary-action" onClick={generateBase} type="button">Create meeting link</button>
               ) : mode === "respond" ? (
                 <button className="primary-action" disabled={!baseToken || busy} onClick={() => void generateParticipant()} type="button">
                   Generate response
@@ -450,40 +443,37 @@ export default function App() {
                     {copiedValue === "token" ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
                     {copiedValue === "token" ? "Copied" : "Copy token"}
                   </button>
-                  <button className="secondary-action" onClick={() => void copyText(privateUrl, "url")} type="button">
-                    {copiedValue === "url" ? <Check aria-hidden="true" size={16} /> : <ShieldCheck aria-hidden="true" size={16} />}
-                    {copiedValue === "url" ? "Copied" : "Private URL"}
+                  <button className="secondary-action" onClick={() => void copyText(shareUrl, "url")} type="button">
+                    {copiedValue === "url" ? <Check aria-hidden="true" size={16} /> : <LinkSimple aria-hidden="true" size={16} />}
+                    {copiedValue === "url" ? "Copied" : "Copy URL"}
                   </button>
                 </>
-              ) : null}
-              {mode === "respond" && participantToken ? (
-                <button className="secondary-action" onClick={() => void addResponseToPlan()} type="button">
-                  <UsersThree aria-hidden="true" size={16} /> Add to plan
-                </button>
               ) : null}
             </div>
           </div>
         </section>
 
-        <section className="protocol-note">
-          <div>
-            <span>One coordinate system</span>
-            <strong>tm2b_</strong>
-            <p>Window, 15-minute grid, time zone and organizer constraints.</p>
-          </div>
-          <div className="protocol-operator">+</div>
-          <div>
-            <span>Independent responses</span>
-            <strong>tm2p_ × n</strong>
-            <p>Base fingerprint and free-time bitmap. No organizer data repeated.</p>
-          </div>
-          <div className="protocol-operator">=</div>
-          <div>
-            <span>Local allocation</span>
-            <strong>Best overlap</strong>
-            <p>Decoded, ranked and displayed entirely inside the browser.</p>
-          </div>
-        </section>
+        {mode !== "respond" ? (
+          <section className="protocol-note">
+            <div>
+              <span>One coordinate system</span>
+              <strong>tm2b_</strong>
+              <p>Window, 15-minute grid, time zone and organizer constraints.</p>
+            </div>
+            <div className="protocol-operator">+</div>
+            <div>
+              <span>Independent responses</span>
+              <strong>tm2p_ × n</strong>
+              <p>Base fingerprint and free-time bitmap. No organizer data repeated.</p>
+            </div>
+            <div className="protocol-operator">=</div>
+            <div>
+              <span>Local allocation</span>
+              <strong>Best overlap</strong>
+              <p>Decoded, ranked and displayed entirely inside the browser.</p>
+            </div>
+          </section>
+        ) : null}
       </main>
 
       <footer>

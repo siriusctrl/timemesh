@@ -16,6 +16,7 @@ type FramePanelProps = {
   onApplyWorkHours: () => void;
   onClear: () => void;
   frameDisabled?: boolean;
+  participantView?: boolean;
   selectionDisabled?: boolean;
 };
 
@@ -25,6 +26,7 @@ export function FramePanel({
   onApplyWorkHours,
   onClear,
   frameDisabled = false,
+  participantView = false,
   selectionDisabled = false,
 }: FramePanelProps) {
   const update = <Key extends keyof FrameSettings>(key: Key, value: FrameSettings[Key]) => {
@@ -35,8 +37,8 @@ export function FramePanel({
     <aside className="frame-panel">
       <div className="panel-heading">
         <div>
-          <span>Base frame</span>
-          <h2>Set the coordinate system</h2>
+          <span>{participantView ? "Meeting details" : "Organizer setup"}</span>
+          <h2>{participantView ? "Share when you are free" : "Define the meeting window"}</h2>
         </div>
         <Clock aria-hidden="true" size={23} />
       </div>
@@ -104,7 +106,9 @@ export function FramePanel({
           Clear marks
         </button>
       </div>
-      <p className="panel-footnote">The token stores absolute slots. The IANA zone preserves daylight-saving boundaries.</p>
+      <p className="panel-footnote">{participantView
+        ? "The organizer's unavailable times stay blocked. Your response remains in this browser until you copy it."
+        : "Times use an IANA zone so daylight-saving boundaries remain accurate."}</p>
     </aside>
   );
 }

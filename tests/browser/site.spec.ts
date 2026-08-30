@@ -1,49 +1,76 @@
 import { expect, test } from "@playwright/test";
 
-test("creates a base, participant response, and local plan", async ({ page }) => {
+test("moves from organizer link to participant response and comparison", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (value: string) => window.sessionStorage.setItem("timemesh-test-clipboard", value),
+      },
+    });
+  });
   await page.goto("./");
   await expect(page.getByRole("heading", { name: /Shared time/ })).toBeVisible();
   await expect(page.getByTestId("calendar-grid")).toBeVisible();
   await expect(page.getByText("15m", { exact: true })).toBeVisible();
+  await expect(page.getByText("Create a meeting · mark organizer conflicts")).toBeVisible();
+  await expect(page.getByRole("tablist")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Keep weekdays 09:00-18:00" }).click();
-  await page.getByRole("button", { name: "Generate base" }).click();
-  const baseCode = page.locator(".output-copy code");
-  await expect(baseCode).toContainText("tm2b_");
+  await page.getByRole("button", { name: "Create meeting link" }).click();
+  const outputCode = page.locator(".output-copy code");
+  const baseToken = await outputCode.textContent();
+  expect(baseToken).toMatch(/^tm2b_/u);
+  await page.getByRole("button", { name: "Copy URL" }).click();
+  const meetingUrl = await page.evaluate(() => window.sessionStorage.getItem("timemesh-test-clipboard"));
+  expect(meetingUrl).toContain(`#/${baseToken}`);
 
-  await page.getByRole("tab", { name: "Availability" }).click();
+  await page.goto(meetingUrl!);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Share when you are free" })).toBeVisible();
+  await expect(page.getByText("Your response · mark every time that works")).toBeVisible();
+  await expect(page.getByRole("tablist")).toHaveCount(0);
+  await expect(page.getByLabel("TimeMesh tokens")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add to plan" })).toHaveCount(0);
   await page.getByRole("button", { name: "Keep weekdays 09:00-18:00" }).click();
   await page.getByRole("button", { name: "Generate response" }).click();
-  await expect(baseCode).toContainText("tm2p_");
-  await expect(page.getByText(/does not duplicate/u)).toBeVisible();
+  const participantToken = await outputCode.textContent();
+  expect(participantToken).toMatch(/^tm2p_/u);
+  await expect(page.getByText("Copy the URL and send it back to the organizer.")).toBeVisible();
+  await page.getByRole("button", { name: "Copy URL" }).click();
+  const responseUrl = await page.evaluate(() => window.sessionStorage.getItem("timemesh-test-clipboard"));
+  expect(responseUrl).toContain(`#/${baseToken}/${participantToken}`);
 
-  await page.getByRole("button", { name: "Add to plan" }).click();
+  await page.goto(responseUrl!);
+  await page.reload();
   await expect(page.getByText("Best shared time")).toBeVisible();
-  await expect(page.getByRole("tab", { name: /Plan 1/u })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("Compare 1 response", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tablist")).toHaveCount(0);
   await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(/tm2b_[A-Za-z0-9_-]+\ntm2p_[A-Za-z0-9_-]+/u);
 });
 
 test("restores a generated base through the token console", async ({ page }) => {
   await page.goto("./");
-  await page.getByRole("button", { name: "Generate base" }).click();
+  await page.getByRole("button", { name: "Create meeting link" }).click();
   const token = await page.locator(".output-copy code").textContent();
   expect(token).toMatch(/^tm2b_/u);
 
   await page.getByLabel("TimeMesh tokens").fill(token!);
   await page.getByRole("button", { name: "Open tokens" }).click();
-  await expect(page.getByRole("tab", { name: "Availability" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByText("Base token restored. Mark your free time without changing the base.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Share when you are free" })).toBeVisible();
+  await expect(page.getByRole("tablist")).toHaveCount(0);
+  await expect(page.getByLabel("TimeMesh tokens")).toHaveCount(0);
 });
 
 test("opens a base token from a pretty path route", async ({ page }) => {
   await page.goto("./");
-  await page.getByRole("button", { name: "Generate base" }).click();
+  await page.getByRole("button", { name: "Create meeting link" }).click();
   const token = await page.locator(".output-copy code").textContent();
   expect(token).toMatch(/^tm2b_/u);
 
   await page.goto(`./t/${token}`);
-  await expect(page.getByRole("tab", { name: "Availability" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(token!);
+  await expect(page.getByRole("heading", { name: "Share when you are free" })).toBeVisible();
+  await expect(page.getByLabel("TimeMesh tokens")).toHaveCount(0);
 });
 
 test("opens the agent skill and switches appearance", async ({ page }) => {
@@ -139,6 +166,6 @@ test("keeps the product controls usable on a narrow viewport", async ({ page }, 
   await page.goto("./");
   await expect(page.getByRole("heading", { name: /Shared time/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open tokens" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Base" })).toBeVisible();
+  await expect(page.getByText("Create a meeting · mark organizer conflicts")).toBeVisible();
   await expect(page.getByTestId("calendar-grid")).toBeVisible();
 });

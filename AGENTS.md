@@ -29,7 +29,7 @@ This file is the operating map for agents working in this repository. Keep produ
 - Never make a language model reproduce binary encoding manually. Agents create explicit time ranges and call the project CLI, then decode the result for round-trip verification.
 - Keep imported tokens, selections, and planning results in browser memory. Theme preference is the only local-storage value.
 - Keep the app statically buildable under `/timemesh/` with no runtime network dependency.
-- Treat `/t/<token>` as a convenience route that exposes its path to the host. Generate `#/<token>` as the private URL.
+- Treat `/t/<token>` as a convenience route that exposes its path to the host. **Copy URL** generates `#/<base-token>` for a meeting and `#/<base-token>/<participant-token>` for a response; fragments are request-private, not secret.
 - Planner code consumes decoded protocol objects. UI components must not parse token bytes directly.
 
 ## Task routing

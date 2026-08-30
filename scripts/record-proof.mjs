@@ -60,20 +60,24 @@ try {
   await desktop.keyboard.press("Escape");
 
   await desktop.getByRole("button", { name: "Keep weekdays 09:00-18:00" }).click();
-  await desktop.getByRole("button", { name: "Generate base" }).click();
+  await desktop.getByRole("button", { name: "Create meeting link" }).click();
+  const baseToken = await desktop.locator(".output-copy code").textContent();
   await desktop.evaluate(() => window.scrollTo(0, 0));
   await capture(desktop, "03-generated-base");
 
-  await desktop.getByRole("tab", { name: "Availability" }).click();
+  await desktop.goto(`${baseUrl}?participant#/${baseToken}`, { waitUntil: "networkidle" });
   await desktop.getByRole("button", { name: "Keep weekdays 09:00-18:00" }).click();
   await desktop.getByRole("button", { name: "Generate response" }).click();
-  await desktop.getByRole("button", { name: "Add to plan" }).click();
+  const participantToken = await desktop.locator(".output-copy code").textContent();
   await desktop.evaluate(() => window.scrollTo(0, 0));
-  await capture(desktop, "04-overlap-plan");
+  await capture(desktop, "04-response-ready");
+
+  await desktop.goto(`${baseUrl}?organizer#/${baseToken}/${participantToken}`, { waitUntil: "networkidle" });
+  await capture(desktop, "05-overlap-plan");
 
   await desktop.getByLabel("Switch to dark mode").click();
   await desktop.evaluate(() => window.scrollTo(0, 0));
-  await capture(desktop, "05-dark-plan");
+  await capture(desktop, "06-dark-plan");
 
   const mobile = await browser.newPage({
     viewport: { width: 393, height: 852 },
@@ -81,7 +85,7 @@ try {
     colorScheme: "light",
   });
   await mobile.goto(baseUrl, { waitUntil: "networkidle" });
-  await capture(mobile, "06-mobile-workbench");
+  await capture(mobile, "07-mobile-workbench");
   await browser.close();
 
   const thumbWidth = 620;

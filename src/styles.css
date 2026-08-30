@@ -385,43 +385,8 @@ main {
   background: var(--surface-raised);
 }
 
-.mode-switcher {
-  display: inline-flex;
-  gap: 4px;
-  padding: 3px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: var(--surface-muted);
-}
-
-.mode-switcher button {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 30px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.mode-switcher button[aria-selected="true"] {
-  background: var(--surface-raised);
-  color: var(--ink);
-  box-shadow: 0 2px 9px rgb(43 47 66 / 10%);
-}
-
-.mode-switcher button span {
-  min-width: 19px;
-  padding: 2px 5px;
-  border-radius: var(--radius-pill);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-  font-family: var(--font-mono);
-  font-size: 9px;
+.workspace-bar-controls {
+  justify-content: flex-end;
 }
 
 .view-controls {
@@ -982,6 +947,15 @@ main {
   white-space: nowrap;
 }
 
+.output-copy small {
+  color: var(--faint);
+  font-size: 9px;
+}
+
+.output-copy small.output-error {
+  color: var(--danger);
+}
+
 .output-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1302,16 +1276,6 @@ footer button {
 
   .workspace-bar {
     gap: 12px;
-  }
-
-  .mode-switcher {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  .mode-switcher button {
-    justify-content: center;
-    padding: 0 8px;
   }
 
   .view-controls {
