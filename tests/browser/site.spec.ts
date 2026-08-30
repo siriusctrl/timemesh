@@ -62,7 +62,9 @@ test("moves from organizer link to participant response and comparison", async (
   await page.getByRole("button", { name: "Generate response" }).click();
   await expect(page.getByText("Response bundle", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Generate response" })).toHaveCount(0);
-  const generatedBundle = await page.getByLabel("TimeMesh tokens").inputValue();
+  const tokenConsole = page.getByLabel("TimeMesh tokens");
+  await expect(tokenConsole).toHaveValue(/tm2p_/u);
+  const generatedBundle = await tokenConsole.inputValue();
   const participantToken = generatedBundle.split(/\s+/u).find((token) => token.startsWith("tm2p_"));
   expect(participantToken).toMatch(/^tm2p_/u);
   await expect(page.getByText("The bundle keeps this response attached to its meeting.")).toBeVisible();
@@ -84,9 +86,10 @@ test("moves from organizer link to participant response and comparison", async (
 
   await page.locator(".marked-free").first().click();
   await expect(page.getByRole("button", { name: "Generate response" })).toBeVisible();
-  await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(baseToken!);
+  await expect(tokenConsole).toHaveValue(baseToken!);
   await page.getByRole("button", { name: "Generate response" }).click();
-  const revisedBundle = await page.getByLabel("TimeMesh tokens").inputValue();
+  await expect(tokenConsole).toHaveValue(/tm2p_/u);
+  const revisedBundle = await tokenConsole.inputValue();
   const revisedParticipantToken = revisedBundle.split(/\s+/u).find((token) => token.startsWith("tm2p_"));
   expect(revisedParticipantToken).toMatch(/^tm2p_/u);
   expect(revisedParticipantToken).not.toBe(participantToken);
@@ -183,46 +186,43 @@ test("opens the agent skill and switches appearance", async ({ page }) => {
   await page.getByLabel("Weekday hours start").fill("07:30");
   const themeToggle = page.getByLabel("Switch to dark mode");
   const toggleBounds = await themeToggle.boundingBox();
+  const nodesBeforeReveal = await page.locator("*").count();
   expect(toggleBounds).not.toBeNull();
   await themeToggle.click();
   await expect(page.locator("html")).toHaveAttribute("data-theme-transition", "active");
-  const revealState = await page.locator("[data-theme-reveal]").evaluate((element) => {
+  await expect.poll(() => page.evaluate(() =>
+    document.getAnimations().some((animation) => animation.id === "theme-reveal"))).toBe(true);
+  const revealState = await page.locator("html").evaluate((element) => {
     const style = getComputedStyle(element);
-    const bounds = element.getBoundingClientRect();
-    const scaleX = bounds.width / (element as HTMLElement).offsetWidth || 1;
-    const scaleY = bounds.height / (element as HTMLElement).offsetHeight || scaleX;
     const x = Number.parseFloat(style.getPropertyValue("--theme-reveal-x"));
     const y = Number.parseFloat(style.getPropertyValue("--theme-reveal-y"));
     const state = {
-      animationId: element.querySelector("[data-theme-reveal-circle]")?.getAnimations()[0]?.id,
+      animationId: document.getAnimations().find((animation) => animation.id === "theme-reveal")?.id,
       rootTheme: document.documentElement.dataset.theme,
-      layerTheme: (element as HTMLElement).dataset.theme,
-      clonedStart: element.querySelector<HTMLInputElement>('[aria-label="Weekday hours start"]')?.value,
-      visualX: bounds.left + x * scaleX,
-      visualY: bounds.top + y * scaleY,
+      inputStart: document.querySelector<HTMLInputElement>('[aria-label="Weekday hours start"]')?.value,
+      nodeCount: document.querySelectorAll("*").length,
+      visualX: x,
+      visualY: y,
     };
     document.querySelector<HTMLButtonElement>("#root .theme-action")?.click();
     return state;
   });
   expect(revealState.animationId).toBe("theme-reveal");
-  expect(revealState.rootTheme).toBe("light");
-  expect(revealState.layerTheme).toBe("dark");
-  expect(revealState.clonedStart).toBe("07:30");
+  expect(revealState.rootTheme).toBe("dark");
+  expect(revealState.inputStart).toBe("07:30");
+  expect(revealState.nodeCount).toBe(nodesBeforeReveal);
   expect(Math.abs(revealState.visualX - (toggleBounds!.x + toggleBounds!.width / 2))).toBeLessThan(1.1);
   expect(Math.abs(revealState.visualY - (toggleBounds!.y + toggleBounds!.height / 2))).toBeLessThan(1.1);
-  const syncedScroll = await page.evaluate(() => {
+  const retainedScroll = await page.evaluate(() => {
     const source = document.querySelector<HTMLElement>("#root .calendar-scroll");
-    const clone = document.querySelector<HTMLElement>("[data-theme-reveal] .calendar-scroll");
-    if (!source || !clone) return null;
+    if (!source) return null;
     source.scrollTop = 180;
-    source.dispatchEvent(new Event("scroll"));
-    return { source: source.scrollTop, clone: clone.scrollTop };
+    return source.scrollTop;
   });
-  expect(syncedScroll?.source).toBeGreaterThan(0);
-  expect(syncedScroll?.clone).toBe(syncedScroll?.source);
+  expect(retainedScroll).toBeGreaterThan(0);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition", "active");
-  await expect(page.locator("[data-theme-reveal]")).toHaveCount(0);
+  await expect(page.getByLabel("Weekday hours start")).toHaveValue("07:30");
 
   const darkContrast = await page.evaluate(() => {
     const styles = getComputedStyle(document.documentElement);
@@ -243,9 +243,8 @@ test("opens the agent skill and switches appearance", async ({ page }) => {
 
   await page.getByLabel("Switch to light mode").click();
   await expect(page.locator("html")).toHaveAttribute("data-theme-transition", "active");
-  await expect(page.locator("[data-theme-reveal]")).toHaveAttribute("data-theme", "light");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await expect(page.locator("[data-theme-reveal]")).toHaveCount(0);
+  await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition", "active");
 });
 
 test("switches themes without a reveal when reduced motion is requested", async ({ page }) => {
@@ -255,7 +254,8 @@ test("switches themes without a reveal when reduced motion is requested", async 
 
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.locator("html")).not.toHaveAttribute("data-theme-transition", "active");
-  await expect(page.locator("[data-theme-reveal]")).toHaveCount(0);
+  expect(await page.evaluate(() =>
+    document.getAnimations().some((animation) => animation.id === "theme-reveal"))).toBe(false);
 });
 
 test("searches and selects a display time zone", async ({ page }) => {

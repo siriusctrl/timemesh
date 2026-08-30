@@ -14,7 +14,7 @@ This file is the operating map for agents working in this repository. Keep produ
 - `src/calendar/alignDays.ts`: shared wall-clock rows for partial and DST display days.
 - `src/components/CalendarGrid.tsx`: drag and keyboard allocation editor plus overlap heatmap.
 - `src/components/ComparisonPanel.tsx`: ranked shared windows for multi-response bundles.
-- `src/useTheme.ts` and `src/themeReveal.ts`: system-aware theme state and manual radial reveal.
+- `src/useTheme.ts` and `src/themeReveal.ts`: system-aware theme state and native View Transition radial reveal.
 - `src/App.tsx`: browser-local workflow state and token composition.
 - `skills/plan-time-with-tokens/`: reusable agent workflow, deterministic CLI, and Token v2 reference.
 - `tests/`: protocol, planner, and Playwright behavior.

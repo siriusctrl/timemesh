@@ -1,20 +1,7 @@
 export type RevealTheme = "light" | "dark";
 
-const REVEAL_DURATION = 920;
-let revealSequence = 0;
-
-function copyLiveState(source: HTMLElement, clone: HTMLElement) {
-  if (source instanceof HTMLInputElement && clone instanceof HTMLInputElement) {
-    clone.value = source.value;
-    clone.checked = source.checked;
-  } else if (source instanceof HTMLTextAreaElement && clone instanceof HTMLTextAreaElement) {
-    clone.value = source.value;
-  } else if (source instanceof HTMLSelectElement && clone instanceof HTMLSelectElement) {
-    clone.value = source.value;
-  }
-  clone.scrollTop = source.scrollTop;
-  clone.scrollLeft = source.scrollLeft;
-}
+const REVEAL_DURATION = 680;
+const REVEAL_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 function commitDocumentTheme(theme: RevealTheme) {
   const root = document.documentElement;
@@ -26,150 +13,64 @@ function commitDocumentTheme(theme: RevealTheme) {
 
 export function beginThemeReveal(trigger: HTMLButtonElement, nextTheme: RevealTheme): boolean {
   const root = document.documentElement;
-  if (root.dataset.themeTransition === "active"
-    || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
-
-  const sourceSurface = document.querySelector<HTMLElement>(".app-shell");
-  if (!sourceSurface) return false;
-
-  const rootZoom = Number.parseFloat(getComputedStyle(root).getPropertyValue("zoom")) || 1;
-  const documentWidth = Math.max(root.scrollWidth / rootZoom, document.body.scrollWidth, root.clientWidth / rootZoom);
-  const documentHeight = Math.max(root.scrollHeight / rootZoom, document.body.scrollHeight, root.clientHeight / rootZoom);
-  const layer = document.createElement("div");
-  const clone = sourceSurface.cloneNode(true) as HTMLElement;
-  const sourceElements = [sourceSurface, ...sourceSurface.querySelectorAll("*")]
-    .filter((element): element is HTMLElement => element instanceof HTMLElement);
-  const cloneElements = [clone, ...clone.querySelectorAll("*")]
-    .filter((element): element is HTMLElement => element instanceof HTMLElement);
-  const pairBySource = new WeakMap<HTMLElement, HTMLElement>();
-
-  layer.className = "theme-render-layer";
-  layer.dataset.themeRenderLayer = "";
-  layer.dataset.themeReveal = "";
-  layer.dataset.theme = nextTheme;
-  layer.setAttribute("aria-hidden", "true");
-  layer.inert = true;
-  layer.style.setProperty("--theme-render-width", `${documentWidth}px`);
-  layer.style.setProperty("--theme-render-height", `${documentHeight}px`);
-  clone.querySelectorAll("[id]").forEach((element) => element.removeAttribute("id"));
-
-  sourceElements.forEach((source, index) => {
-    const cloneElement = cloneElements[index];
-    if (!cloneElement) return;
-    pairBySource.set(source, cloneElement);
-    copyLiveState(source, cloneElement);
-  });
-
-  layer.append(clone);
-  document.body.append(layer);
-  layer.style.setProperty("--theme-render-height", `${Math.max(documentHeight, layer.scrollHeight)}px`);
-  sourceElements.forEach((source) => {
-    const cloneElement = pairBySource.get(source);
-    if (cloneElement) copyLiveState(source, cloneElement);
-  });
+  if (
+    root.dataset.themeTransition === "active" ||
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+    !document.startViewTransition
+  ) return false;
 
   const triggerBounds = trigger.getBoundingClientRect();
-  const layerBounds = layer.getBoundingClientRect();
-  const scaleX = layerBounds.width / layer.offsetWidth || 1;
-  const scaleY = layerBounds.height / layer.offsetHeight || scaleX;
-  const visualX = triggerBounds.left + triggerBounds.width / 2;
-  const visualY = triggerBounds.top + triggerBounds.height / 2;
-  const x = (visualX - layerBounds.left) / scaleX;
-  const y = (visualY - layerBounds.top) / scaleY;
-  const startRadius = Math.max(triggerBounds.width / scaleX, triggerBounds.height / scaleY) / 2;
-  const visualRadius = Math.hypot(
-    Math.max(visualX, root.clientWidth - visualX),
-    Math.max(visualY, root.clientHeight - visualY),
+  const x = triggerBounds.left + triggerBounds.width / 2;
+  const y = triggerBounds.top + triggerBounds.height / 2;
+  const startRadius = Math.max(triggerBounds.width, triggerBounds.height) / 2;
+  const endRadius = Math.hypot(
+    Math.max(x, window.innerWidth - x),
+    Math.max(y, window.innerHeight - y),
   );
-  const endRadius = visualRadius / Math.min(scaleX, scaleY);
-  layer.style.setProperty("--theme-reveal-x", `${x}px`);
-  layer.style.setProperty("--theme-reveal-y", `${y}px`);
-  layer.style.setProperty("--theme-reveal-start-radius", `${startRadius}px`);
-  layer.style.setProperty("--theme-reveal-end-radius", `${endRadius}px`);
 
-  const svgNamespace = "http://www.w3.org/2000/svg";
-  const definitions = document.createElementNS(svgNamespace, "svg");
-  const definitionGroup = document.createElementNS(svgNamespace, "defs");
-  const clip = document.createElementNS(svgNamespace, "clipPath");
-  const circle = document.createElementNS(svgNamespace, "circle");
-  const clipId = `timemesh-theme-reveal-${revealSequence += 1}`;
-  definitions.classList.add("theme-reveal-defs");
-  definitions.setAttribute("aria-hidden", "true");
-  clip.id = clipId;
-  clip.dataset.themeRevealClip = "";
-  clip.setAttribute("clipPathUnits", "userSpaceOnUse");
-  circle.dataset.themeRevealCircle = "";
-  circle.setAttribute("cx", `${x}`);
-  circle.setAttribute("cy", `${y}`);
-  circle.setAttribute("r", `${startRadius}`);
-  clip.append(circle);
-  definitionGroup.append(clip);
-  definitions.append(definitionGroup);
-  layer.prepend(definitions);
-  layer.style.clipPath = `url(#${clipId})`;
+  root.style.setProperty("--theme-reveal-x", `${x}px`);
+  root.style.setProperty("--theme-reveal-y", `${y}px`);
+  root.style.setProperty("--theme-reveal-start-radius", `${startRadius}px`);
+  root.style.setProperty("--theme-reveal-end-radius", `${endRadius}px`);
+  root.dataset.themeTransition = "active";
+  root.dataset.themeCommit = "active";
 
-  let animation: Animation;
+  let transition: ViewTransition;
   try {
-    animation = circle.animate([
-      { r: `${startRadius}px`, offset: 0 },
-      { r: `${Math.max(startRadius, endRadius * 0.025)}px`, offset: 0.16 },
-      { r: `${Math.max(startRadius, endRadius * 0.1)}px`, offset: 0.38 },
-      { r: `${Math.max(startRadius, endRadius * 0.31)}px`, offset: 0.62 },
-      { r: `${Math.max(startRadius, endRadius * 0.65)}px`, offset: 0.82 },
-      { r: `${endRadius}px`, offset: 1 },
-    ], { duration: REVEAL_DURATION, easing: "linear", fill: "both" });
+    transition = document.startViewTransition(() => commitDocumentTheme(nextTheme));
   } catch {
-    layer.remove();
+    delete root.dataset.themeTransition;
+    delete root.dataset.themeCommit;
     return false;
   }
 
-  animation.id = "theme-reveal";
-  root.dataset.themeTransition = "active";
-  const initialScrollX = window.scrollX;
-  const initialScrollY = window.scrollY;
-  let lastScrollX = initialScrollX;
-  let lastScrollY = initialScrollY;
+  void transition.ready.then(() => {
+    const animation = root.animate(
+      {
+        clipPath: [
+          `circle(${startRadius}px at ${x}px ${y}px)`,
+          `circle(${endRadius}px at ${x}px ${y}px)`,
+        ],
+      },
+      {
+        duration: REVEAL_DURATION,
+        easing: REVEAL_EASING,
+        fill: "both",
+        pseudoElement: "::view-transition-new(root)",
+      },
+    );
+    animation.id = "theme-reveal";
+  }).catch(() => {
+    // The theme is already committed; the reveal is progressive enhancement.
+  });
 
-  const syncWindowScroll = () => {
-    if (window.scrollX === lastScrollX && window.scrollY === lastScrollY) return;
-    lastScrollX = window.scrollX;
-    lastScrollY = window.scrollY;
-    const centerX = x + (lastScrollX - initialScrollX) / scaleX;
-    const centerY = y + (lastScrollY - initialScrollY) / scaleY;
-    layer.style.setProperty("--theme-reveal-x", `${centerX}px`);
-    layer.style.setProperty("--theme-reveal-y", `${centerY}px`);
-    circle.setAttribute("cx", `${centerX}`);
-    circle.setAttribute("cy", `${centerY}`);
-  };
-  const syncNestedScroll = (event: Event) => {
-    if (!(event.target instanceof HTMLElement)) return;
-    const cloneElement = pairBySource.get(event.target);
-    if (!cloneElement) return;
-    cloneElement.scrollTop = event.target.scrollTop;
-    cloneElement.scrollLeft = event.target.scrollLeft;
-  };
-  window.addEventListener("scroll", syncWindowScroll, { passive: true });
-  document.addEventListener("scroll", syncNestedScroll, true);
-
-  let finished = false;
-  const finish = () => {
-    if (finished) return;
-    finished = true;
-    window.removeEventListener("scroll", syncWindowScroll);
-    document.removeEventListener("scroll", syncNestedScroll, true);
-    root.dataset.themeCommit = "active";
-    commitDocumentTheme(nextTheme);
-    window.removeEventListener("pagehide", finish);
-    requestAnimationFrame(() => {
-      layer.remove();
-      delete root.dataset.themeTransition;
-      requestAnimationFrame(() => {
-        delete root.dataset.themeCommit;
-      });
-    });
-  };
-  animation.addEventListener("finish", finish, { once: true });
-  animation.addEventListener("cancel", finish, { once: true });
-  window.addEventListener("pagehide", finish, { once: true });
+  void transition.finished.finally(() => {
+    delete root.dataset.themeTransition;
+    delete root.dataset.themeCommit;
+    root.style.removeProperty("--theme-reveal-x");
+    root.style.removeProperty("--theme-reveal-y");
+    root.style.removeProperty("--theme-reveal-start-radius");
+    root.style.removeProperty("--theme-reveal-end-radius");
+  });
   return true;
 }

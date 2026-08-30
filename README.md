@@ -41,7 +41,7 @@ The compact token console stays available in every workspace. It recognizes a me
 - `tm2b_` stores the absolute frame, grid and meeting duration, organizer IANA time zone, and compressed organizer-unavailable bitmap.
 - `tm2p_` stores a base fingerprint, slot count, and compressed participant-free bitmap. It is valid only with the exact meeting token used to create it.
 - Tokens are deterministic, reversible, and protected against accidental corruption by a checksum. They are not encrypted or access-controlled.
-- Calendar selections, imported tokens, and comparison results stay in browser memory. Only an explicit light/dark override is stored locally; otherwise the interface follows the system theme. Manual switches use a motion-aware radial reveal.
+- Calendar selections, imported tokens, and comparison results stay in browser memory. Only an explicit light/dark override is stored locally; otherwise the interface follows the system theme. Manual switches use a motion-aware radial reveal backed by browser snapshots rather than a cloned application DOM.
 - The app is a static Vite build under `/timemesh/` and has no runtime network dependency.
 - Agents use the checked-in CLI for encoding, organizer-conflict reporting, and round-trip validation instead of reproducing binary encoding manually. The Agent Skill can create a meeting or turn natural-language availability plus a base token into a complete response bundle without opening the web app.
 
