@@ -32,8 +32,29 @@ test("moves from organizer link to participant response and comparison", async (
   await expect(page.getByRole("tablist")).toHaveCount(0);
   await expect(page.getByLabel("TimeMesh tokens")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Add to plan" })).toHaveCount(0);
+  await expect(page.getByText("Copy the agent skill")).toHaveCount(0);
+  await expect(page.locator(".workspace-summary").getByRole("combobox", { name: "Display time zone" })).toBeVisible();
+
+  const participantLayout = await page.locator(".workspace").evaluate((workspace) => {
+    const summary = workspace.querySelector(".workspace-summary");
+    if (!summary) return null;
+    const workspaceBox = workspace.getBoundingClientRect();
+    const summaryBox = summary.getBoundingClientRect();
+    return {
+      bottomGap: window.innerHeight - workspaceBox.bottom,
+      summaryOffset: summaryBox.top - workspaceBox.top,
+      viewportWidth: window.innerWidth,
+    };
+  });
+  expect(participantLayout?.summaryOffset).toBeLessThanOrEqual(2);
+  if ((participantLayout?.viewportWidth ?? 0) > 780) {
+    expect(participantLayout?.bottomGap).toBeGreaterThanOrEqual(0);
+    expect(participantLayout?.bottomGap).toBeLessThanOrEqual(16);
+  }
+
   await page.getByRole("button", { name: "Keep weekdays 09:00-18:00" }).click();
   await page.getByRole("button", { name: "Generate response" }).click();
+  await expect(outputCode).toContainText("tm2p_");
   const participantToken = await outputCode.textContent();
   expect(participantToken).toMatch(/^tm2p_/u);
   await expect(page.getByText("Copy the URL and send it back to the organizer.")).toBeVisible();

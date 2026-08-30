@@ -290,7 +290,7 @@ export default function App() {
       : scores.filter((score) => score >= 0).length;
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell app-shell-${mode}`}>
       <header className="site-header">
         <div className="header-identity">
           <a className="brand" href={import.meta.env.BASE_URL}>
@@ -333,22 +333,6 @@ export default function App() {
         ) : null}
 
         <section className="workspace" aria-label="Time allocation workspace">
-          <div className="workspace-bar workspace-bar-controls">
-            <div className="view-controls">
-              <TimeZoneSelect
-                ariaLabel="Display time zone"
-                id="display-timezone"
-                label="Display zone"
-                onChange={setDisplayTimezone}
-                value={displayTimezone}
-              />
-              <button className="view-toggle" onClick={() => setFullDay(!fullDay)} type="button">
-                {fullDay ? <EyeSlash aria-hidden="true" size={16} /> : <Eye aria-hidden="true" size={16} />}
-                {fullDay ? "Focus hours" : "Full day"}
-              </button>
-            </div>
-          </div>
-
           <div className="workspace-summary">
             <div>
               <span>{mode === "base"
@@ -358,14 +342,29 @@ export default function App() {
                   : `Compare ${participants.length} response${participants.length === 1 ? "" : "s"}`}</span>
               <strong>{describeBaseRange(base, effectiveDisplayTimezone)}</strong>
             </div>
-            <dl>
-              <div><dt>Grid</dt><dd>{base.slotMinutes}m</dd></div>
-              <div><dt>{mode === "base" ? "Blocked" : mode === "respond" ? "Free" : "Open"}</dt><dd>{selectedCount}</dd></div>
-              <div>
-                <dt>{mode === "respond" ? "Meeting" : "Responses"}</dt>
-                <dd>{mode === "respond" ? `${base.meetingMinutes}m` : participants.length}</dd>
+            <div className="workspace-summary-tools">
+              <div className="view-controls">
+                <TimeZoneSelect
+                  ariaLabel="Display time zone"
+                  id="display-timezone"
+                  label="Display zone"
+                  onChange={setDisplayTimezone}
+                  value={displayTimezone}
+                />
+                <button className="view-toggle" onClick={() => setFullDay(!fullDay)} type="button">
+                  {fullDay ? <EyeSlash aria-hidden="true" size={16} /> : <Eye aria-hidden="true" size={16} />}
+                  {fullDay ? "Focus hours" : "Full day"}
+                </button>
               </div>
-            </dl>
+              <dl>
+                <div><dt>Grid</dt><dd>{base.slotMinutes}m</dd></div>
+                <div><dt>{mode === "base" ? "Blocked" : mode === "respond" ? "Free" : "Open"}</dt><dd>{selectedCount}</dd></div>
+                <div>
+                  <dt>{mode === "respond" ? "Meeting" : "Responses"}</dt>
+                  <dd>{mode === "respond" ? `${base.meetingMinutes}m` : participants.length}</dd>
+                </div>
+              </dl>
+            </div>
           </div>
 
           <div className="workspace-layout">
@@ -475,12 +474,6 @@ export default function App() {
           </section>
         ) : null}
       </main>
-
-      <footer>
-        <span>TimeMesh</span>
-        <p>No account. No database. Tokens stay portable.</p>
-        <button onClick={() => setSkillOpen(true)} type="button">Copy the agent skill</button>
-      </footer>
 
       <SkillDrawer onClose={() => setSkillOpen(false)} open={skillOpen} skillText={agentSkill} />
     </div>
