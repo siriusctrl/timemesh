@@ -76,9 +76,11 @@ try {
   await capture(desktop, "05-overlap-plan");
 
   await desktop.getByLabel("Switch to dark mode").click();
-  await desktop.waitForTimeout(250);
+  await desktop.waitForTimeout(430);
+  await capture(desktop, "06-theme-reveal", false);
+  await desktop.waitForFunction(() => !document.documentElement.dataset.themeTransition);
   await desktop.evaluate(() => window.scrollTo(0, 0));
-  await capture(desktop, "06-dark-plan");
+  await capture(desktop, "07-dark-plan");
 
   const mobile = await browser.newPage({
     viewport: { width: 393, height: 852 },
@@ -86,7 +88,7 @@ try {
     colorScheme: "light",
   });
   await mobile.goto(baseUrl, { waitUntil: "networkidle" });
-  await capture(mobile, "07-mobile-workbench");
+  await capture(mobile, "08-mobile-workbench");
   await browser.close();
 
   const thumbWidth = 620;

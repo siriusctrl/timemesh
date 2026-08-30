@@ -154,7 +154,7 @@ Implemented in the kickoff MVP:
 - 15/30/60-minute grids with a 15-minute default;
 - maximum 31-day local window with DST-safe absolute slots;
 - browser-local drag selection, token restoration, response generation, overlap heatmap, and ranked meeting windows;
-- responsive light and dark interfaces that follow the system theme by default;
+- responsive light and dark interfaces that follow the system theme by default and use a motion-aware radial reveal for manual switches;
 - project-local Agent Skill and deterministic CLI;
 - GitHub Pages workflow and deep-link fallback.
 

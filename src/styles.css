@@ -1,4 +1,6 @@
-:root {
+:root,
+[data-theme-render-layer] {
+  color-scheme: light;
   --font-sans: "Manrope Variable", "Segoe UI", sans-serif;
   --font-mono: "DM Mono", "SFMono-Regular", monospace;
   --page: #f1f1f3;
@@ -26,7 +28,9 @@
   --radius-pill: 999px;
 }
 
-:root[data-theme="dark"] {
+:root[data-theme="dark"],
+[data-theme-render-layer][data-theme="dark"] {
+  color-scheme: dark;
   --page: #24252b;
   --page-deep: #282a31;
   --surface: #2b2c33;
@@ -58,6 +62,46 @@ html {
   color: var(--ink);
   font-family: var(--font-sans);
   text-rendering: optimizeLegibility;
+}
+
+.theme-render-layer {
+  position: absolute;
+  z-index: 90;
+  top: 0;
+  left: 0;
+  display: block;
+  width: var(--theme-render-width);
+  min-height: var(--theme-render-height);
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 18% -8%, color-mix(in srgb, var(--accent) 8%, transparent), transparent 34rem),
+    linear-gradient(90deg, transparent 0, rgb(62 68 91 / 2.5%) 50%, transparent 100%),
+    var(--page);
+  font-family: var(--font-sans);
+  pointer-events: none;
+  isolation: isolate;
+  will-change: clip-path;
+}
+
+.theme-reveal-defs {
+  position: absolute;
+  overflow: hidden;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.theme-render-layer *,
+.theme-render-layer *::before,
+.theme-render-layer *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+:root[data-theme-commit="active"] *,
+:root[data-theme-commit="active"] *::before,
+:root[data-theme-commit="active"] *::after {
+  transition: none !important;
 }
 
 body {
@@ -232,6 +276,20 @@ a:focus-visible {
   display: block;
 }
 
+.theme-sun {
+  display: none !important;
+}
+
+:root[data-theme="dark"] .app-shell .theme-moon,
+[data-theme-render-layer][data-theme="dark"] .theme-moon {
+  display: none;
+}
+
+:root[data-theme="dark"] .app-shell .theme-sun,
+[data-theme-render-layer][data-theme="dark"] .theme-sun {
+  display: block !important;
+}
+
 main {
   flex: 1;
   width: min(1500px, calc(100% - clamp(20px, 3vw, 48px)));
@@ -325,7 +383,8 @@ main {
   color: #f7f8ff;
 }
 
-:root[data-theme="dark"] .primary-action {
+:root[data-theme="dark"] .primary-action,
+[data-theme-render-layer][data-theme="dark"] .primary-action {
   color: #252731;
 }
 

@@ -44,6 +44,7 @@ import {
   type ParticipantAllocation,
   type TokenError,
 } from "./protocol/types";
+import { beginThemeReveal } from "./themeReveal";
 
 type Theme = "light" | "dark";
 type ThemePreference = Theme | "system";
@@ -129,14 +130,17 @@ export default function App() {
   }, []);
 
   useLayoutEffect(() => {
+    if (document.documentElement.dataset.themeTransition === "active") return;
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
     document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
       ?.setAttribute("content", theme === "dark" ? "#24252b" : "#f1f1f3");
   }, [theme]);
 
-  const toggleTheme = () => {
+  const toggleTheme = (trigger: HTMLButtonElement) => {
+    if (document.documentElement.dataset.themeTransition === "active") return;
     const nextTheme = theme === "light" ? "dark" : "light";
+    beginThemeReveal(trigger, nextTheme);
     setThemePreference(nextTheme);
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
@@ -333,14 +337,15 @@ export default function App() {
           <button
             aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
             className="theme-action"
-            onClick={toggleTheme}
+            onClick={(event) => toggleTheme(event.currentTarget)}
             title={themePreference === "system"
               ? `Following system ${theme} mode. Switch to ${theme === "light" ? "dark" : "light"} mode`
               : `Switch to ${theme === "light" ? "dark" : "light"} mode`}
             type="button"
           >
             <span className="theme-action-icon">
-              {theme === "light" ? <Moon aria-hidden="true" size={16} /> : <Sun aria-hidden="true" size={16} />}
+              <Moon aria-hidden="true" className="theme-moon" size={16} />
+              <Sun aria-hidden="true" className="theme-sun" size={16} />
             </span>
           </button>
         </nav>
