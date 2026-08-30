@@ -18,7 +18,7 @@ Time-zone fields accept canonical IANA names and major-city searches such as San
 
 1. Open the meeting URL. TimeMesh reconstructs the same absolute slots in your display time zone.
 2. Mark every free slot, or edit and apply the weekday-hours shortcut.
-3. Select **Generate response**, then copy the complete bundle or URL and send it back to the organizer.
+3. Select **Generate response**, then use **Copy token bundle** or **Copy URL** and send it back to the organizer.
 
 The response bundle and URL both contain the meeting token plus its dependent `tm2p_...` response token. Opening either restores the response for interactive review and editing; generating again replaces the response token. No response is sent or stored automatically.
 

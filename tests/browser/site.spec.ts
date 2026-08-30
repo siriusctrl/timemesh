@@ -22,7 +22,7 @@ test("moves from organizer link to participant response and comparison", async (
   await page.getByRole("button", { name: "Generate token" }).click();
   await expect(page.getByText("Meeting token", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Generate token" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Copy bundle" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Copy token bundle" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Copy token" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy URL" })).toBeVisible();
   const outputCode = page.locator(".output-copy code");
@@ -66,7 +66,7 @@ test("moves from organizer link to participant response and comparison", async (
   const participantToken = generatedBundle.split(/\s+/u).find((token) => token.startsWith("tm2p_"));
   expect(participantToken).toMatch(/^tm2p_/u);
   await expect(page.getByText("The bundle keeps this response attached to its meeting.")).toBeVisible();
-  await page.getByRole("button", { name: "Copy bundle" }).click();
+  await page.getByRole("button", { name: "Copy token bundle" }).click();
   const copiedBundle = await page.evaluate(() => window.sessionStorage.getItem("timemesh-test-clipboard"));
   expect(copiedBundle).toBe(`${baseToken}\n${participantToken}`);
   await page.getByRole("button", { name: "Copy URL" }).click();

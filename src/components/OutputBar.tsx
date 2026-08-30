@@ -69,7 +69,7 @@ export function OutputBar({
         ) : (
           <button className="secondary-action" onClick={() => onCopy(tokenBundle, "bundle")} type="button">
             {copiedValue === "bundle" ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
-            {copiedValue === "bundle" ? "Copied" : "Copy bundle"}
+            {copiedValue === "bundle" ? "Copied" : "Copy token bundle"}
           </button>
         )}
         {workspace === "organizer" && baseToken ? (
@@ -88,7 +88,7 @@ export function OutputBar({
           <>
             <button className="secondary-action" onClick={() => onCopy(tokenBundle, "bundle")} type="button">
               {copiedValue === "bundle" ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
-              {copiedValue === "bundle" ? "Copied" : "Copy bundle"}
+              {copiedValue === "bundle" ? "Copied" : "Copy token bundle"}
             </button>
             <button className="secondary-action" onClick={() => onCopy(shareUrl, "url")} type="button">
               {copiedValue === "url" ? <Check aria-hidden="true" size={16} /> : <LinkSimple aria-hidden="true" size={16} />}
