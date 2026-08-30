@@ -109,9 +109,9 @@ test("moves from organizer link to participant response and comparison", async (
 
 test("renders overlap heat for an imported comparison bundle", async ({ page }) => {
   const bundle = [
-    "tm2b_DwA8Aca3gAVADUFzaWEvU2hhbmdoYWkCgAEwMDAwMDAwMDDwATAwMDAwMDAwMHDCRKfh",
-    "tm2p_wsxW_v-viFsFQAGEAQRcBFwMVARcBLgG2gESQA",
-    "tm2p_wsxW_v-viFsFQAGIAQRbBVsFXARcBLQGaqclKg",
+    "Organizer | tm2b_DwA8Aca3gAVADUFzaWEvU2hhbmdoYWkCgAEwMDAwMDAwMDDwATAwMDAwMDAwMHDCRKfh",
+    "Alice | tm2p_wsxW_v-viFsFQAGEAQRcBFwMVARcBLgG2gESQA",
+    "Bob | tm2p_wsxW_v-viFsFQAGIAQRbBVsFXARcBLQGaqclKg",
   ].join("\n");
 
   await page.goto("./");
@@ -119,11 +119,29 @@ test("renders overlap heat for an imported comparison bundle", async ({ page }) 
   await page.getByRole("button", { name: "Open tokens" }).click();
   await expect(page.getByText("Loaded 2 responses for comparison.")).toBeVisible();
   await expect(page.getByText("Best shared time")).toBeVisible();
+  await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(bundle);
+  await expect(page.locator(".candidate-list li").first()).toContainText("Alice · Bob");
   const strengths = await page.locator(".heat-slot").evaluateAll((slots) => slots.map((slot) =>
     Number.parseFloat(getComputedStyle(slot).getPropertyValue("--heat-strength"))
   ));
   expect(strengths.some((strength) => strength > 0)).toBe(true);
   expect(strengths.some((strength) => strength === 82)).toBe(true);
+});
+
+test("attaches optional names to generated token bundles", async ({ page }) => {
+  await page.goto("./");
+  await page.getByRole("button", { name: "Generate token" }).click();
+  const baseToken = await page.getByLabel("TimeMesh tokens").inputValue();
+  await page.getByLabel("TimeMesh tokens").fill(`Jordan | ${baseToken}`);
+
+  await page.getByRole("button", { name: "Open tokens" }).click();
+  await expect(page.getByRole("heading", { name: "Share when you are free" })).toBeVisible();
+  await page.getByLabel("Your name (optional)").fill("Alice");
+  await page.getByRole("button", { name: "Generate response" }).click();
+  await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(/^Jordan \| tm2b_[A-Za-z0-9_-]+\nAlice \| tm2p_[A-Za-z0-9_-]+$/u);
+
+  await page.getByLabel("Your name (optional)").fill("Alice Chen");
+  await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(/^Jordan \| tm2b_[A-Za-z0-9_-]+\nAlice Chen \| tm2p_[A-Za-z0-9_-]+$/u);
 });
 
 test("restores a generated base through the token console", async ({ page }) => {
@@ -149,7 +167,9 @@ test("accepts a participant token on an already opened meeting", async ({ page }
   await page.goto(`./#/${baseToken}`);
   await page.reload();
   await page.getByRole("button", { name: "Generate response" }).click();
-  const responseBundle = await page.getByLabel("TimeMesh tokens").inputValue();
+  const tokenConsole = page.getByLabel("TimeMesh tokens");
+  await expect(tokenConsole).toHaveValue(/tm2p_/u);
+  const responseBundle = await tokenConsole.inputValue();
   const participantToken = responseBundle.split(/\s+/u).find((token) => token.startsWith("tm2p_"));
   expect(participantToken).toMatch(/^tm2p_/u);
 

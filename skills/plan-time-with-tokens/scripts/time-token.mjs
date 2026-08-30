@@ -1462,11 +1462,30 @@ async function decodeParticipantToken(token, baseToken, base) {
   assertCanonicalBitset(participant.free, base.slotCount);
   return participant;
 }
-function extractTokens(input) {
-  return input.match(/tm2[bp]_[A-Za-z0-9_-]+/gu) ?? [];
+function extractTokenEntries(input) {
+  return input.split(/\r?\n/u).flatMap((line) => {
+    const matches = [...line.matchAll(/tm2[bp]_[A-Za-z0-9_-]+/gu)];
+    return matches.map((match) => {
+      if (matches.length !== 1) return { token: match[0] };
+      const prefix = line.slice(0, match.index).match(/^\s*(.*?)\s*\|\s*$/u);
+      const label = prefix?.[1].trim();
+      return label ? { token: match[0], label } : { token: match[0] };
+    });
+  });
+}
+function formatTokenLine(token, label) {
+  const normalized = label?.trim();
+  return normalized ? `${normalized} | ${token}` : token;
+}
+function formatTokenBundle(baseToken, participantTokens = [], labels = {}) {
+  return [
+    formatTokenLine(baseToken, labels.base),
+    ...participantTokens.map((token, index) => formatTokenLine(token, labels.participants?.[index]))
+  ].join("\n");
 }
 async function decodeTokenBundle(input) {
-  const tokens = extractTokens(input);
+  const entries = extractTokenEntries(input);
+  const tokens = entries.map((entry) => entry.token);
   const baseTokens = [...new Set(
     tokens.filter((token) => token.startsWith(BASE_TOKEN_PREFIX))
   )];
@@ -1477,14 +1496,30 @@ async function decodeTokenBundle(input) {
     throw new TokenError("invalid_contract", "A token bundle may contain only one distinct base token.");
   }
   const baseToken = baseTokens[0];
+  const baseLabel = entries.find((entry) => entry.token === baseToken && entry.label)?.label;
   const base = decodeBaseToken(baseToken);
-  const participantTokens = [...new Set(
-    tokens.filter((token) => token.startsWith(PARTICIPANT_TOKEN_PREFIX))
-  )];
+  const participantEntries = [];
+  const seenParticipants = /* @__PURE__ */ new Set();
+  const labeledParticipants = /* @__PURE__ */ new Map();
+  for (const entry of entries.filter(({ token }) => token.startsWith(PARTICIPANT_TOKEN_PREFIX))) {
+    if (entry.label) {
+      const existing = labeledParticipants.get(entry.label);
+      if (existing && existing !== entry.token) {
+        throw new TokenError("invalid_contract", `${entry.label} has more than one distinct response token.`);
+      }
+      labeledParticipants.set(entry.label, entry.token);
+    }
+    const key = `${entry.label ?? ""}\0${entry.token}`;
+    if (seenParticipants.has(key)) continue;
+    seenParticipants.add(key);
+    participantEntries.push(entry);
+  }
+  const participantTokens = participantEntries.map((entry) => entry.token);
+  const participantLabels = participantEntries.map((entry) => entry.label);
   const participants = await Promise.all(
     participantTokens.map((participantToken) => decodeParticipantToken(participantToken, baseToken, base))
   );
-  return { baseToken, base, participantTokens, participants };
+  return { baseToken, baseLabel, base, participantTokens, participantLabels, participants };
 }
 
 // src/protocol/planner.ts
@@ -5680,7 +5715,7 @@ function excludeOrganizerConflicts(base, requestedFree) {
 function usage() {
   console.error(`Usage:
   time-token base --start YYYY-MM-DD --days N --timezone Area/City [--slot 15] [--meeting 60] [--unavailable-json path]
-  time-token participant --base tm2b_... --free-json path [--output token|bundle]
+  time-token participant --base tm2b_... --free-json path [--output token|bundle] [--name NAME] [--base-name NAME]
   time-token compare --bundle-file path [--preferences-json path] [--timezone Area/City] [--limit 12]
   time-token validate TOKEN [--base tm2b_...]
   time-token decode TOKEN [--base tm2b_...]`);
@@ -5809,8 +5844,10 @@ try {
     if (output !== "token" && output !== "bundle") {
       throw new Error("--output must be token or bundle.");
     }
-    console.log(output === "bundle" ? `${baseToken.trim()}
-${token}` : token);
+    console.log(output === "bundle" ? formatTokenBundle(baseToken.trim(), [token], {
+      base: args.get("base-name"),
+      participants: [args.get("name")]
+    }) : token);
     console.error(JSON.stringify({
       kind: decoded.kind,
       baseRef: baseRefLabel(decoded.baseRef),
@@ -5829,7 +5866,7 @@ ${token}` : token);
     const bundle = await decodeTokenBundle(await readFile(bundlePath, "utf8"));
     const preferences = args.get("preferences-json") ? await readPreferences(required(args, "preferences-json")) : {};
     if ((preferences.minimumAttendees ?? 0) > bundle.participants.length) {
-      throw new Error(`minimumAttendees cannot exceed the ${bundle.participants.length} unique responses in the bundle.`);
+      throw new Error(`minimumAttendees cannot exceed the ${bundle.participants.length} responses in the bundle.`);
     }
     const limit = Number(args.get("limit") ?? 12);
     if (!Number.isInteger(limit) || limit < 1) throw new Error("--limit must be a positive integer.");
@@ -5848,7 +5885,8 @@ ${token}` : token);
       kind: "comparison",
       base: baseSummary(bundle.base),
       displayTimezone,
-      uniqueResponseCount: bundle.participants.length,
+      responseCount: bundle.participants.length,
+      uniqueResponseTokenCount: new Set(bundle.participantTokens).size,
       preferences,
       rankingPolicy: [
         "Organizer availability and allowedRanges are hard constraints.",
@@ -5864,6 +5902,9 @@ ${token}` : token);
         attendeeCount: candidate.attendeeCount,
         participantCount: candidate.participantCount,
         responseNumbers: candidate.participantIndexes.map((participantIndex) => participantIndex + 1),
+        responseNames: candidate.participantIndexes.map(
+          (participantIndex) => bundle.participantLabels[participantIndex] || `Response ${participantIndex + 1}`
+        ),
         preferredSlotCount: candidate.preferredSlotCount,
         fullyPreferred: preferredSlots !== void 0 && candidate.preferredSlotCount === durationSlots
       }))

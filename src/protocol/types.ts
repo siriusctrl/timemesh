@@ -26,8 +26,10 @@ export type ParticipantAllocation = {
 
 export type TokenBundle = {
   baseToken: string;
+  baseLabel?: string;
   base: BaseAllocation;
   participantTokens: string[];
+  participantLabels: Array<string | undefined>;
   participants: ParticipantAllocation[];
 };
 

@@ -13,7 +13,7 @@
     "token": "tsx skills/plan-time-with-tokens/scripts/time-token.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "npm run test && npm run build",
+    "check": "npm run skill:bundle && npm run test && tsc -b && vite build",
     "verify:ui": "playwright test",
     "verify:proof": "node scripts/record-proof.mjs",
     "setup:browsers": "playwright install chromium webkit",

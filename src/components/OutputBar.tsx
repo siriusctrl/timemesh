@@ -74,7 +74,7 @@ export function OutputBar({
         )}
         {workspace === "organizer" && baseToken ? (
           <>
-            <button className="secondary-action" onClick={() => onCopy(baseToken, "token")} type="button">
+            <button className="secondary-action" onClick={() => onCopy(tokenBundle || baseToken, "token")} type="button">
               {copiedValue === "token" ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
               {copiedValue === "token" ? "Copied" : "Copy token"}
             </button>

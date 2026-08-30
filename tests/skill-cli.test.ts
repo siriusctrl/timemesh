@@ -47,12 +47,16 @@ describe("portable TimeMesh Skill CLI", () => {
       freePath,
       "--output",
       "bundle",
+      "--base-name",
+      "Organizer",
+      "--name",
+      "Alice",
     ], { cwd: directory });
 
-    const tokens = stdout.trim().split("\n");
-    expect(tokens).toHaveLength(2);
-    expect(tokens[0]).toBe(baseToken);
-    expect(tokens[1]).toMatch(/^tm2p_/u);
+    const lines = stdout.trim().split("\n");
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toBe(`Organizer | ${baseToken}`);
+    expect(lines[1]).toMatch(/^Alice \| tm2p_/u);
   });
 
   test("ranks repeated response bundles with transparent organizer preferences", async () => {
@@ -70,8 +74,9 @@ describe("portable TimeMesh Skill CLI", () => {
       encodeParticipantToken(baseToken, base, [48, 49]),
     ]);
     const bundlePath = path.join(directory, "bundles.txt");
+    const responseNames = ["Alice", "Bob", "Cara"];
     await writeFile(bundlePath, responseTokens
-      .map((responseToken) => `${baseToken}\n${responseToken}`)
+      .map((responseToken, index) => `Organizer | ${baseToken}\n${responseNames[index]} | ${responseToken}`)
       .join("\n\n"));
     const preferencesPath = path.join(directory, "preferences.json");
     await writeFile(preferencesPath, JSON.stringify({
@@ -91,20 +96,22 @@ describe("portable TimeMesh Skill CLI", () => {
       "UTC",
     ], { cwd: directory });
     const result = JSON.parse(stdout) as {
-      uniqueResponseCount: number;
+      responseCount: number;
       candidates: Array<{
         start: string;
         attendeeCount: number;
         responseNumbers: number[];
+        responseNames: string[];
         fullyPreferred: boolean;
       }>;
     };
 
-    expect(result.uniqueResponseCount).toBe(3);
+    expect(result.responseCount).toBe(3);
     expect(result.candidates[0]).toMatchObject({
       start: "2026-09-01T12:00:00+00:00[UTC]",
       attendeeCount: 2,
       responseNumbers: [1, 3],
+      responseNames: ["Alice", "Cara"],
       fullyPreferred: true,
     });
   });

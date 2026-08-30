@@ -18,6 +18,8 @@ If only this Markdown file was pasted, download the complete portable package fr
 
 Extract every `tm2b_...` and `tm2p_...` value from the user's message before asking questions.
 
+Preserve an optional `Name | token` prefix as display metadata. Names stay outside the binary protocol. If the user identifies the organizer or participant, include that name in the final text bundle.
+
 - With no base token, help create a meeting.
 - With one base and zero or one response, help create or revise that response.
 - With one base and multiple responses, validate the bundle and rank shared windows.
@@ -59,7 +61,7 @@ node scripts/time-token.mjs base --start YYYY-MM-DD --days 14 --timezone Area/Ci
 ```
 
 ```sh
-node scripts/time-token.mjs participant --base 'tm2b_...' --free-json /absolute/path/free.json --output bundle
+node scripts/time-token.mjs participant --base 'tm2b_...' --free-json /absolute/path/free.json --output bundle --name 'Alice' --base-name 'Organizer'
 ```
 
 Validate and decode every result.
@@ -81,7 +83,7 @@ Put the collected response bundles in one text file. Repeated copies of the same
 node scripts/time-token.mjs compare --bundle-file /absolute/path/bundles.txt --timezone Area/City
 ```
 
-The JSON result lists ranked continuous windows, attendance counts, and the response numbers available for each one. Default ranking is transparent: organizer availability is required, more participants ranks first, and earlier times break remaining ties.
+The JSON result lists ranked continuous windows, attendance counts, and the response numbers and names available for each one. Default ranking is transparent: organizer availability is required, more participants ranks first, and earlier times break remaining ties.
 
 Organizer preferences are optional. They belong in a separate JSON file so they do not alter canonical tokens:
 
@@ -107,10 +109,11 @@ node scripts/time-token.mjs compare --bundle-file /absolute/path/bundles.txt --p
 
 - For a meeting, put the complete `tm2b_` token on its own line.
 - For a response, put the unchanged `tm2b_` base on one line and the new `tm2p_` response on the next line.
+- When a display name is known, format the line as `Name | tm2b_...` or `Name | tm2p_...`. Do not encode the name into a token.
 - State the date window, display time zone, slot size, selected-slot count, conflict count, and validation result.
 - Do not expose calendar event details.
 - Mention the TimeMesh app only as an optional interactive review and editing surface; the local workflow must already be complete.
 
 ## Planning discipline
 
-Normalize to one distinct base and its unique participant tokens. Participant identity and labels remain outside canonical tokens, so comparison results refer to responses by their one-based order. A single response remains editable; two or more responses form a comparison bundle.
+Normalize to one distinct base and its participant entries. Repeated unlabeled tokens and repeated `(name, token)` pairs are duplicates; identical token text with different names represents different people. Reject one name attached to multiple distinct response tokens. Participant identity and labels remain outside canonical tokens, so unnamed comparison results fall back to one-based response numbers. A single response remains editable; two or more responses form a comparison bundle.

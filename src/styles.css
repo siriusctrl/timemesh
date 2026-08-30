@@ -645,6 +645,19 @@ main {
   color: var(--faint);
 }
 
+.participant-name-input {
+  width: 112px;
+  height: 30px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1090,6 +1103,15 @@ main {
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 9px;
+}
+
+.candidate-list li > div:nth-child(2) small {
+  overflow: hidden;
+  max-width: 125px;
+  color: var(--faint);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .attendance {

@@ -6,6 +6,8 @@ TimeMesh has no invitation, account, session, or remote-response model. A base t
 
 Tokens can travel through URLs, chat, files, QR codes, or agent output without a messaging backend.
 
+Text bundles may attach an optional display name with `Name | token`. The label is transport metadata, not protocol identity: it never changes token bytes. Distinct names let identical response tokens represent different people; an unlabeled duplicate is normalized, and one name cannot point to two different responses in the same comparison.
+
 ## 2. Tokens are canonical and reversible
 
 A complete token is a deterministic binary encoding, not a hash or random identifier. Equal canonical allocations produce equal tokens. CRC32 detects accidental damage; SHA-256 is used only to bind a participant token to its base.
@@ -54,6 +56,8 @@ The CLI source and frontend both import `src/protocol/codec.ts`. The Skill build
 
 Multi-response planning is also deterministic. Organizer-unavailable time and optional owner `allowedRanges` are hard constraints. `minimumAttendees` can filter candidates. Attendance ranks first, optional `preferredRanges` breaks attendance ties, and time breaks remaining ties. The tool exposes those fields and a ranked candidate set instead of claiming to infer an organizer's unstated preferences.
 
+When names are present, planner indexes still refer to decoded response order while CLI and UI projections expose the corresponding display names. Ranking rules never depend on a name.
+
 ## 7. GitHub Pages hosts code, not planning state
 
 The Vite build uses `/timemesh/`, and GitHub Pages serves static assets plus a `404.html` deep-route fallback.
@@ -64,6 +68,8 @@ The Vite build uses `/timemesh/`, and GitHub Pages serves static assets plus a `
 - A base followed by two or more participant tokens opens local comparison.
 
 The UI calls this action **Copy URL**. Fragments stay out of HTTP requests but are not secret, encrypted, revocable, or access-controlled.
+
+URLs carry canonical tokens only. Optional names stay in copied text bundles so route syntax and token identity remain stable.
 
 ## 8. Browser state is disposable
 

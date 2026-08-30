@@ -18,9 +18,9 @@ Time-zone fields accept canonical IANA names and major-city searches such as San
 
 1. Open the meeting URL. TimeMesh reconstructs the same absolute slots in your display time zone.
 2. Mark every free slot, or edit and apply the weekday-hours shortcut.
-3. Select **Generate response**, then use **Copy token bundle** or **Copy URL** and send it back to the organizer.
+3. Optionally add your name. Select **Generate response**, then use **Copy token bundle** to keep that name or **Copy URL** for a token-only link, and send it back to the organizer.
 
-The response bundle and URL both contain the meeting token plus its dependent `tm2p_...` response token. Opening either restores the response for interactive review and editing; generating again replaces the response token. No response is sent or stored automatically.
+The response bundle contains the meeting token plus its dependent `tm2p_...` response token and any optional display names. The URL contains only canonical tokens. Opening either restores the response for interactive review and editing; generating again replaces the response token. No response is sent or stored automatically.
 
 ### Compare responses
 
@@ -32,7 +32,15 @@ tm2p_...
 tm2p_...
 ```
 
-TimeMesh validates each response against the meeting, displays an overlap heatmap, and ranks continuous windows long enough for the configured meeting duration.
+Names may prefix individual lines as optional transport metadata:
+
+```text
+Organizer | tm2b_...
+Alice | tm2p_...
+Bob | tm2p_...
+```
+
+TimeMesh validates each response against the meeting, displays an overlap heatmap, and ranks continuous windows long enough for the configured meeting duration. Named candidates show who can attend. Identical token text with different names counts as different people; repeated copies of the same name and token are normalized.
 
 The compact token console stays available in every workspace. It recognizes a meeting token, a complete response bundle, multiple-response comparison bundles, or a participant token pasted while its meeting is already open.
 
@@ -40,6 +48,7 @@ The compact token console stays available in every workspace. It recognizes a me
 
 - `tm2b_` stores the absolute frame, grid and meeting duration, organizer IANA time zone, and compressed organizer-unavailable bitmap.
 - `tm2p_` stores a base fingerprint, slot count, and compressed participant-free bitmap. It is valid only with the exact meeting token used to create it.
+- Optional names live only beside tokens in text bundles. They never change token bytes, checksums, or base references, and token URLs do not carry them.
 - Tokens are deterministic, reversible, and protected against accidental corruption by a checksum. They are not encrypted or access-controlled.
 - Calendar selections, imported tokens, and comparison results stay in browser memory. Only an explicit light/dark override is stored locally; otherwise the interface follows the system theme. Manual switches use a motion-aware radial reveal.
 - The app is a static Vite build under `/timemesh/` and has no runtime network dependency.
@@ -101,7 +110,9 @@ Create a complete response bundle:
 npm run token -- participant \
   --base 'tm2b_...' \
   --free-json availability/free.json \
-  --output bundle
+  --output bundle \
+  --name 'Alice' \
+  --base-name 'Organizer'
 ```
 
 Range files use inclusive starts and exclusive ends. Each boundary must include an offset or bracketed IANA zone:

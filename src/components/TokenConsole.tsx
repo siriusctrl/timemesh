@@ -25,7 +25,7 @@ export function TokenConsole({
         <textarea
           aria-label="TimeMesh tokens"
           onChange={(event) => onChange(event.target.value)}
-          placeholder={"Paste tm2b_... followed by any tm2p_... tokens"}
+          placeholder={"Paste tokens, optionally as Name | tm2p_..."}
           rows={1}
           spellCheck={false}
           value={value}

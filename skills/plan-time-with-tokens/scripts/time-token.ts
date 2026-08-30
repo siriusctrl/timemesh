@@ -9,6 +9,7 @@ import {
   decodeTokenBundle,
   encodeBaseToken,
   encodeParticipantToken,
+  formatTokenBundle,
 } from "../../../src/protocol/codec";
 import { findCandidateWindows } from "../../../src/protocol/planner";
 import {
@@ -31,7 +32,7 @@ import {
 function usage(): never {
   console.error(`Usage:
   time-token base --start YYYY-MM-DD --days N --timezone Area/City [--slot 15] [--meeting 60] [--unavailable-json path]
-  time-token participant --base tm2b_... --free-json path [--output token|bundle]
+  time-token participant --base tm2b_... --free-json path [--output token|bundle] [--name NAME] [--base-name NAME]
   time-token compare --bundle-file path [--preferences-json path] [--timezone Area/City] [--limit 12]
   time-token validate TOKEN [--base tm2b_...]
   time-token decode TOKEN [--base tm2b_...]`);
@@ -191,7 +192,12 @@ try {
     if (output !== "token" && output !== "bundle") {
       throw new Error("--output must be token or bundle.");
     }
-    console.log(output === "bundle" ? `${baseToken.trim()}\n${token}` : token);
+    console.log(output === "bundle"
+      ? formatTokenBundle(baseToken.trim(), [token], {
+          base: args.get("base-name"),
+          participants: [args.get("name")],
+        })
+      : token);
     console.error(JSON.stringify({
       kind: decoded.kind,
       baseRef: baseRefLabel(decoded.baseRef),
@@ -212,7 +218,7 @@ try {
       ? await readPreferences(required(args, "preferences-json"))
       : {};
     if ((preferences.minimumAttendees ?? 0) > bundle.participants.length) {
-      throw new Error(`minimumAttendees cannot exceed the ${bundle.participants.length} unique responses in the bundle.`);
+      throw new Error(`minimumAttendees cannot exceed the ${bundle.participants.length} responses in the bundle.`);
     }
     const limit = Number(args.get("limit") ?? 12);
     if (!Number.isInteger(limit) || limit < 1) throw new Error("--limit must be a positive integer.");
@@ -235,7 +241,8 @@ try {
       kind: "comparison",
       base: baseSummary(bundle.base),
       displayTimezone,
-      uniqueResponseCount: bundle.participants.length,
+      responseCount: bundle.participants.length,
+      uniqueResponseTokenCount: new Set(bundle.participantTokens).size,
       preferences,
       rankingPolicy: [
         "Organizer availability and allowedRanges are hard constraints.",
@@ -251,6 +258,9 @@ try {
         attendeeCount: candidate.attendeeCount,
         participantCount: candidate.participantCount,
         responseNumbers: candidate.participantIndexes.map((participantIndex) => participantIndex + 1),
+        responseNames: candidate.participantIndexes.map((participantIndex) =>
+          bundle.participantLabels[participantIndex] || `Response ${participantIndex + 1}`
+        ),
         preferredSlotCount: candidate.preferredSlotCount,
         fullyPreferred: preferredSlots !== undefined && candidate.preferredSlotCount === durationSlots,
       })),

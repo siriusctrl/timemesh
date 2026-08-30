@@ -7,9 +7,10 @@ type ComparisonPanelProps = {
   base: BaseAllocation;
   candidates: CandidateWindow[];
   displayTimezone: string;
+  participantLabels: Array<string | undefined>;
 };
 
-export function ComparisonPanel({ base, candidates, displayTimezone }: ComparisonPanelProps) {
+export function ComparisonPanel({ base, candidates, displayTimezone, participantLabels }: ComparisonPanelProps) {
   return (
     <aside className="comparison-panel">
       <div className="panel-heading">
@@ -33,12 +34,16 @@ export function ComparisonPanel({ base, candidates, displayTimezone }: Compariso
             const startTime = formatInstant(start, displayTimezone, { hour: "2-digit", minute: "2-digit", hour12: false });
             const endTime = formatInstant(end, displayTimezone, { hour: "2-digit", minute: "2-digit", hour12: false });
             const everyone = candidate.attendeeCount === candidate.participantCount;
+            const attendeeNames = candidate.participantIndexes.map((participantIndex) =>
+              participantLabels[participantIndex] || `Response ${participantIndex + 1}`
+            );
             return (
               <li className={index === 0 ? "best-candidate" : ""} key={candidate.startSlot}>
                 <div className="candidate-rank">{String(index + 1).padStart(2, "0")}</div>
                 <div>
                   <strong>{date}</strong>
                   <span>{startTime} - {endTime}</span>
+                  <small title={attendeeNames.join(", ")}>{attendeeNames.join(" · ")}</small>
                 </div>
                 <div className={everyone ? "attendance everyone" : "attendance"}>
                   {everyone ? <CheckCircle aria-hidden="true" size={15} weight="fill" /> : null}

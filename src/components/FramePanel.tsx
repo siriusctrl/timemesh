@@ -1,4 +1,4 @@
-import { ArrowCounterClockwise, Clock, GlobeHemisphereWest, MagicWand } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, GlobeHemisphereWest, MagicWand } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { SlotMinutes } from "../protocol/types";
 import { TimeZoneSelect } from "./TimeZoneSelect";
@@ -18,6 +18,8 @@ type FramePanelProps = {
   onClear: () => void;
   frameDisabled?: boolean;
   participantView?: boolean;
+  identityLabel?: string;
+  onIdentityLabelChange?: (value: string) => void;
 };
 
 export function FramePanel({
@@ -27,6 +29,8 @@ export function FramePanel({
   onClear,
   frameDisabled = false,
   participantView = false,
+  identityLabel,
+  onIdentityLabelChange,
 }: FramePanelProps) {
   const [workdayStart, setWorkdayStart] = useState("08:00");
   const [workdayEnd, setWorkdayEnd] = useState("20:00");
@@ -49,7 +53,15 @@ export function FramePanel({
       {participantView ? (
         <div className="panel-heading">
           <h2>Share when you are free</h2>
-          <Clock aria-hidden="true" size={23} />
+          <input
+            aria-label="Your name (optional)"
+            autoComplete="name"
+            className="participant-name-input"
+            onChange={(event) => onIdentityLabelChange?.(event.target.value)}
+            placeholder="Name (optional)"
+            title="Included in copied token bundles, not token URLs."
+            value={identityLabel}
+          />
         </div>
       ) : null}
       <div className="field-grid">

@@ -226,11 +226,42 @@ export async function decodeParticipantToken(
 }
 
 export function extractTokens(input: string): string[] {
-  return input.match(/tm2[bp]_[A-Za-z0-9_-]+/gu) ?? [];
+  return extractTokenEntries(input).map((entry) => entry.token);
+}
+
+type TokenEntry = { token: string; label?: string };
+
+export function extractTokenEntries(input: string): TokenEntry[] {
+  return input.split(/\r?\n/u).flatMap((line) => {
+    const matches = [...line.matchAll(/tm2[bp]_[A-Za-z0-9_-]+/gu)];
+    return matches.map((match) => {
+      if (matches.length !== 1) return { token: match[0] };
+      const prefix = line.slice(0, match.index).match(/^\s*(.*?)\s*\|\s*$/u);
+      const label = prefix?.[1].trim();
+      return label ? { token: match[0], label } : { token: match[0] };
+    });
+  });
+}
+
+export function formatTokenLine(token: string, label?: string): string {
+  const normalized = label?.trim();
+  return normalized ? `${normalized} | ${token}` : token;
+}
+
+export function formatTokenBundle(
+  baseToken: string,
+  participantTokens: string[] = [],
+  labels: { base?: string; participants?: Array<string | undefined> } = {},
+): string {
+  return [
+    formatTokenLine(baseToken, labels.base),
+    ...participantTokens.map((token, index) => formatTokenLine(token, labels.participants?.[index])),
+  ].join("\n");
 }
 
 export async function decodeTokenBundle(input: string): Promise<TokenBundle> {
-  const tokens = extractTokens(input);
+  const entries = extractTokenEntries(input);
+  const tokens = entries.map((entry) => entry.token);
   const baseTokens = [...new Set(
     tokens.filter((token) => token.startsWith(BASE_TOKEN_PREFIX)),
   )];
@@ -241,12 +272,28 @@ export async function decodeTokenBundle(input: string): Promise<TokenBundle> {
     throw new TokenError("invalid_contract", "A token bundle may contain only one distinct base token.");
   }
   const baseToken = baseTokens[0];
+  const baseLabel = entries.find((entry) => entry.token === baseToken && entry.label)?.label;
   const base = decodeBaseToken(baseToken);
-  const participantTokens = [...new Set(
-    tokens.filter((token) => token.startsWith(PARTICIPANT_TOKEN_PREFIX)),
-  )];
+  const participantEntries: TokenEntry[] = [];
+  const seenParticipants = new Set<string>();
+  const labeledParticipants = new Map<string, string>();
+  for (const entry of entries.filter(({ token }) => token.startsWith(PARTICIPANT_TOKEN_PREFIX))) {
+    if (entry.label) {
+      const existing = labeledParticipants.get(entry.label);
+      if (existing && existing !== entry.token) {
+        throw new TokenError("invalid_contract", `${entry.label} has more than one distinct response token.`);
+      }
+      labeledParticipants.set(entry.label, entry.token);
+    }
+    const key = `${entry.label ?? ""}\u0000${entry.token}`;
+    if (seenParticipants.has(key)) continue;
+    seenParticipants.add(key);
+    participantEntries.push(entry);
+  }
+  const participantTokens = participantEntries.map((entry) => entry.token);
+  const participantLabels = participantEntries.map((entry) => entry.label);
   const participants = await Promise.all(
     participantTokens.map((participantToken) => decodeParticipantToken(participantToken, baseToken, base)),
   );
-  return { baseToken, base, participantTokens, participants };
+  return { baseToken, baseLabel, base, participantTokens, participantLabels, participants };
 }

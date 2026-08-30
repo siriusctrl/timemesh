@@ -16,6 +16,8 @@ import {
   encodeBaseToken,
   encodeParticipantToken,
   extractTokens,
+  formatTokenBundle,
+  formatTokenLine,
 } from "./protocol/codec";
 import { availabilityScores, findCandidateWindows } from "./protocol/planner";
 import {
@@ -79,8 +81,11 @@ export default function App() {
   const [base, setBase] = useState<BaseAllocation>(initial.base);
   const [freeSlots, setFreeSlots] = useState<Set<number>>(new Set());
   const [baseToken, setBaseToken] = useState("");
+  const [baseLabel, setBaseLabel] = useState("");
   const [participantToken, setParticipantToken] = useState("");
+  const [responseLabel, setResponseLabel] = useState("");
   const [participants, setParticipants] = useState<ParticipantAllocation[]>([]);
+  const [participantLabels, setParticipantLabels] = useState<Array<string | undefined>>([]);
   const [tokenInput, setTokenInput] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
@@ -111,6 +116,7 @@ export default function App() {
       setBaseToken("");
       setParticipantToken("");
       setParticipants([]);
+      setParticipantLabels([]);
       setTokenInput("");
       setNotice({ kind: "info", message: "Organizer availability changed. Generate a new meeting token before collecting responses." });
     }
@@ -121,7 +127,8 @@ export default function App() {
     if (participantToken) {
       setParticipantToken("");
       setParticipants([]);
-      setTokenInput(baseToken);
+      setParticipantLabels([]);
+      setTokenInput(formatTokenLine(baseToken, baseLabel));
       setNotice({ kind: "info", message: "Response changed. Generate a new response bundle." });
     }
   };
@@ -139,6 +146,7 @@ export default function App() {
       setBaseToken("");
       setParticipantToken("");
       setParticipants([]);
+      setParticipantLabels([]);
       setTokenInput("");
       setNotice(null);
     } catch (error) {
@@ -179,7 +187,8 @@ export default function App() {
       const token = encodeBaseToken(base);
       setBaseToken(token);
       setParticipantToken("");
-      setTokenInput(token);
+      setParticipantLabels([]);
+      setTokenInput(formatTokenLine(token, baseLabel));
       setNotice({ kind: "success", message: "Meeting token generated and verified locally." });
     } catch (error) {
       setNotice({ kind: "error", message: errorMessage(error) });
@@ -194,7 +203,11 @@ export default function App() {
       const decoded = await decodeParticipantToken(token, baseToken, base);
       setParticipantToken(token);
       setParticipants([decoded]);
-      setTokenInput(`${baseToken}\n${token}`);
+      setParticipantLabels([responseLabel.trim() || undefined]);
+      setTokenInput(formatTokenBundle(baseToken, [token], {
+        base: baseLabel,
+        participants: [responseLabel],
+      }));
       setNotice({ kind: "success", message: "Response bundle ready. Copy the bundle or URL and send it back to the organizer." });
     } catch (error) {
       setNotice({ kind: "error", message: errorMessage(error) });
@@ -208,7 +221,7 @@ export default function App() {
     try {
       const pasted = extractTokens(input);
       const hasBase = pasted.some((token) => token.startsWith(BASE_TOKEN_PREFIX));
-      const source = hasBase || !baseToken ? input : `${baseToken}\n${input}`;
+      const source = hasBase || !baseToken ? input : `${formatTokenLine(baseToken, baseLabel)}\n${input}`;
       const bundle = await decodeTokenBundle(source);
       setBase(bundle.base);
       setSettings({
@@ -219,14 +232,20 @@ export default function App() {
         meetingMinutes: bundle.base.meetingMinutes,
       });
       setBaseToken(bundle.baseToken);
+      setBaseLabel(bundle.baseLabel ?? "");
       const nextWorkspace = workspaceForImportedResponses(bundle.participants.length);
       setParticipants(bundle.participants);
+      setParticipantLabels(bundle.participantLabels);
       setParticipantToken(bundle.participantTokens.length === 1 ? bundle.participantTokens[0] : "");
+      setResponseLabel(bundle.participantTokens.length === 1 ? bundle.participantLabels[0] ?? "" : "");
       setFreeSlots(bundle.participants.length === 1
         ? bitsetToSet(bundle.participants[0].free, bundle.base.slotCount)
         : new Set());
       setWorkspace(nextWorkspace);
-      setTokenInput([bundle.baseToken, ...bundle.participantTokens].join("\n"));
+      setTokenInput(formatTokenBundle(bundle.baseToken, bundle.participantTokens, {
+        base: bundle.baseLabel,
+        participants: bundle.participantLabels,
+      }));
       setNotice({
         kind: "success",
         message: bundle.participants.length > 1
@@ -255,6 +274,16 @@ export default function App() {
     await navigator.clipboard.writeText(value);
     setCopiedValue(type);
     window.setTimeout(() => setCopiedValue(null), 1600);
+  };
+
+  const updateResponseLabel = (value: string) => {
+    setResponseLabel(value);
+    if (!participantToken) return;
+    setParticipantLabels([value.trim() || undefined]);
+    setTokenInput(formatTokenBundle(baseToken, [participantToken], {
+      base: baseLabel,
+      participants: [value],
+    }));
   };
 
   const urlTokenBundle = workspace === "response" && participantToken
@@ -308,13 +337,20 @@ export default function App() {
 
           <div className="workspace-layout">
             {workspace === "comparison" ? (
-              <ComparisonPanel base={base} candidates={candidates} displayTimezone={effectiveDisplayTimezone} />
+              <ComparisonPanel
+                base={base}
+                candidates={candidates}
+                displayTimezone={effectiveDisplayTimezone}
+                participantLabels={participantLabels}
+              />
             ) : (
               <FramePanel
                 frameDisabled={workspace !== "organizer"}
                 onApplyWorkHours={applyWorkHours}
                 onChange={updateSettings}
                 onClear={clearSelection}
+                identityLabel={workspace === "response" ? responseLabel : undefined}
+                onIdentityLabelChange={workspace === "response" ? updateResponseLabel : undefined}
                 participantView={workspace === "response"}
                 settings={settings}
               />

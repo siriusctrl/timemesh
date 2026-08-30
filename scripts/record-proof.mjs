@@ -66,6 +66,7 @@ try {
   await capture(desktop, "03-generated-base");
 
   await desktop.goto(`${baseUrl}?participant#/${baseToken}`, { waitUntil: "networkidle" });
+  await desktop.getByLabel("Your name (optional)").fill("Alice");
   await desktop.getByRole("button", { name: "Mark weekday hours free" }).click();
   await desktop.getByRole("button", { name: "Generate response" }).click();
   const firstBundle = await desktop.getByLabel("TimeMesh tokens").inputValue();
@@ -77,7 +78,7 @@ try {
   await desktop.getByRole("button", { name: "Generate response" }).click();
   const revisedBundle = await desktop.getByLabel("TimeMesh tokens").inputValue();
   const revisedParticipantToken = revisedBundle.split(/\s+/u).find((token) => token.startsWith("tm2p_"));
-  await desktop.getByLabel("TimeMesh tokens").fill(`${baseToken}\n${participantToken}\n${revisedParticipantToken}`);
+  await desktop.getByLabel("TimeMesh tokens").fill(`Jordan | ${baseToken}\nAlice | ${participantToken}\nBob | ${revisedParticipantToken}`);
   await desktop.getByRole("button", { name: "Open tokens" }).click();
   await desktop.getByText("Best shared time").waitFor();
   await capture(desktop, "05-response-comparison");

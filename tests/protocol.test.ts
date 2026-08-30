@@ -6,6 +6,7 @@ import {
   decodeTokenBundle,
   encodeBaseToken,
   encodeParticipantToken,
+  formatTokenBundle,
 } from "../src/protocol/codec";
 import { createBaseAllocation, excludeOrganizerConflicts, workHoursSlotSet } from "../src/protocol/time";
 
@@ -142,6 +143,46 @@ describe("TimeMesh Token v2", () => {
     expect(bundle.base.timezone).toBe("Asia/Tokyo");
     expect(bundle.participants).toHaveLength(1);
     expect(bundle.participantTokens).toEqual([participant]);
+  });
+
+  test("keeps optional transport labels and counts identical named responses separately", async () => {
+    const base = createBaseAllocation({
+      startDate: "2026-11-01",
+      days: 1,
+      timezone: "UTC",
+    });
+    const baseToken = encodeBaseToken(base);
+    const participant = await encodeParticipantToken(baseToken, base, [40, 41, 42]);
+    const input = [
+      `Organizer | ${baseToken}`,
+      `Alice | ${participant}`,
+      `Bob | ${participant}`,
+      `Alice | ${participant}`,
+    ].join("\n");
+    const bundle = await decodeTokenBundle(input);
+
+    expect(bundle.baseLabel).toBe("Organizer");
+    expect(bundle.participantTokens).toEqual([participant, participant]);
+    expect(bundle.participantLabels).toEqual(["Alice", "Bob"]);
+    expect(bundle.participants).toHaveLength(2);
+    expect(formatTokenBundle(bundle.baseToken, bundle.participantTokens, {
+      base: bundle.baseLabel,
+      participants: bundle.participantLabels,
+    })).toBe([`Organizer | ${baseToken}`, `Alice | ${participant}`, `Bob | ${participant}`].join("\n"));
+  });
+
+  test("rejects two distinct responses carrying the same name", async () => {
+    const base = createBaseAllocation({
+      startDate: "2026-11-01",
+      days: 1,
+      timezone: "UTC",
+    });
+    const baseToken = encodeBaseToken(base);
+    const first = await encodeParticipantToken(baseToken, base, [40, 41]);
+    const second = await encodeParticipantToken(baseToken, base, [42, 43]);
+
+    await expect(decodeTokenBundle(`${baseToken}\nAlice | ${first}\nAlice | ${second}`))
+      .rejects.toThrowError(/Alice has more than one distinct response token/u);
   });
 
   test("compresses a regular two-week schedule and round-trips its canonical bitmap", async () => {
