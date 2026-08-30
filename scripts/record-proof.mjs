@@ -59,14 +59,14 @@ try {
   await capture(desktop, "02-city-timezone-search", false);
   await desktop.keyboard.press("Escape");
 
-  await desktop.getByRole("button", { name: "Keep weekdays 09:00-18:00" }).click();
+  await desktop.getByRole("button", { name: "Keep weekday hours" }).click();
   await desktop.getByRole("button", { name: "Create meeting link" }).click();
   const baseToken = await desktop.locator(".output-copy code").textContent();
   await desktop.evaluate(() => window.scrollTo(0, 0));
   await capture(desktop, "03-generated-base");
 
   await desktop.goto(`${baseUrl}?participant#/${baseToken}`, { waitUntil: "networkidle" });
-  await desktop.getByRole("button", { name: "Keep weekdays 09:00-18:00" }).click();
+  await desktop.getByRole("button", { name: "Mark weekday hours free" }).click();
   await desktop.getByRole("button", { name: "Generate response" }).click();
   const participantToken = await desktop.locator(".output-copy code").textContent();
   await desktop.evaluate(() => window.scrollTo(0, 0));

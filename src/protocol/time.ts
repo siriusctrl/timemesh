@@ -193,14 +193,22 @@ export function rangesToSlotSet(
 export function workHoursSlotSet(
   base: BaseAllocation,
   timeZone: string,
-  startHour: number,
-  endHour: number,
+  startMinute: number,
+  endMinute: number,
   weekdaysOnly = true,
 ): Set<number> {
+  if (!Number.isInteger(startMinute) || !Number.isInteger(endMinute)) {
+    throw new RangeError("Work-hour boundaries must be whole minutes.");
+  }
+  if (startMinute < 0 || endMinute > 24 * 60 || startMinute >= endMinute) {
+    throw new RangeError("Work hours must be an ordered range within one day.");
+  }
+
   const result = new Set<number>();
   for (let index = 0; index < base.slotCount; index += 1) {
     const zoned = slotInstant(base, index).toZonedDateTimeISO(timeZone);
-    const withinHours = zoned.hour >= startHour && zoned.hour < endHour;
+    const minuteOfDay = zoned.hour * 60 + zoned.minute;
+    const withinHours = minuteOfDay >= startMinute && minuteOfDay < endMinute;
     const withinDays = !weekdaysOnly || zoned.dayOfWeek <= 5;
     if (withinHours && withinDays) result.add(index);
   }

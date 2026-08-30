@@ -164,8 +164,8 @@ export default function App() {
     }
   };
 
-  const applyWorkHours = () => {
-    const workHours = workHoursSlotSet(base, base.timezone, 9, 18, true);
+  const applyWorkHours = (startMinute: number, endMinute: number) => {
+    const workHours = workHoursSlotSet(base, base.timezone, startMinute, endMinute, true);
     if (mode === "base") {
       const unavailable = new Set<number>();
       for (let index = 0; index < base.slotCount; index += 1) {
@@ -452,27 +452,6 @@ export default function App() {
           </div>
         </section>
 
-        {mode !== "respond" ? (
-          <section className="protocol-note">
-            <div>
-              <span>One coordinate system</span>
-              <strong>tm2b_</strong>
-              <p>Window, 15-minute grid, time zone and organizer constraints.</p>
-            </div>
-            <div className="protocol-operator">+</div>
-            <div>
-              <span>Independent responses</span>
-              <strong>tm2p_ × n</strong>
-              <p>Base fingerprint and free-time bitmap. No organizer data repeated.</p>
-            </div>
-            <div className="protocol-operator">=</div>
-            <div>
-              <span>Local allocation</span>
-              <strong>Best overlap</strong>
-              <p>Decoded, ranked and displayed entirely inside the browser.</p>
-            </div>
-          </section>
-        ) : null}
       </main>
 
       <SkillDrawer onClose={() => setSkillOpen(false)} open={skillOpen} skillText={agentSkill} />

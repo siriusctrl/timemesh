@@ -1,4 +1,5 @@
 import { ArrowCounterClockwise, Clock, GlobeHemisphereWest, MagicWand } from "@phosphor-icons/react";
+import { useState } from "react";
 import type { SlotMinutes } from "../protocol/types";
 import { TimeZoneSelect } from "./TimeZoneSelect";
 
@@ -13,7 +14,7 @@ export type FrameSettings = {
 type FramePanelProps = {
   settings: FrameSettings;
   onChange: (next: FrameSettings) => void;
-  onApplyWorkHours: () => void;
+  onApplyWorkHours: (startMinute: number, endMinute: number) => void;
   onClear: () => void;
   frameDisabled?: boolean;
   participantView?: boolean;
@@ -29,9 +30,21 @@ export function FramePanel({
   participantView = false,
   selectionDisabled = false,
 }: FramePanelProps) {
+  const [workdayStart, setWorkdayStart] = useState("08:00");
+  const [workdayEnd, setWorkdayEnd] = useState("20:00");
+
   const update = <Key extends keyof FrameSettings>(key: Key, value: FrameSettings[Key]) => {
     onChange({ ...settings, [key]: value });
   };
+
+  const toMinuteOfDay = (value: string) => {
+    const [hour, minute] = value.split(":").map(Number);
+    return hour * 60 + minute;
+  };
+  const startMinute = toMinuteOfDay(workdayStart);
+  const endMinute = toMinuteOfDay(workdayEnd);
+  const completeWorkHours = /^\d{2}:\d{2}$/u.test(workdayStart) && /^\d{2}:\d{2}$/u.test(workdayEnd);
+  const invalidWorkHours = !completeWorkHours || endMinute <= startMinute;
 
   return (
     <aside className="frame-panel">
@@ -96,11 +109,38 @@ export function FramePanel({
           </select>
         </label>
       </div>
-      <div className="preset-actions">
-        <button disabled={selectionDisabled} onClick={onApplyWorkHours} type="button">
-          <MagicWand aria-hidden="true" size={16} />
-          Keep weekdays 09:00-18:00
+      <div className="work-hours-preset">
+        <div className="work-hours-label">
+          <MagicWand aria-hidden="true" size={15} />
+          <span>Weekday hours</span>
+        </div>
+        <div className="work-hours-inputs">
+          <input
+            aria-label="Weekday hours start"
+            onChange={(event) => setWorkdayStart(event.target.value)}
+            step={settings.slotMinutes * 60}
+            type="time"
+            value={workdayStart}
+          />
+          <span aria-hidden="true">to</span>
+          <input
+            aria-label="Weekday hours end"
+            onChange={(event) => setWorkdayEnd(event.target.value)}
+            step={settings.slotMinutes * 60}
+            type="time"
+            value={workdayEnd}
+          />
+        </div>
+        {invalidWorkHours ? <p role="alert">Choose an end time later than the start.</p> : null}
+        <button
+          disabled={selectionDisabled || invalidWorkHours}
+          onClick={() => onApplyWorkHours(startMinute, endMinute)}
+          type="button"
+        >
+          {participantView ? "Mark weekday hours free" : "Keep weekday hours"}
         </button>
+      </div>
+      <div className="preset-actions">
         <button disabled={selectionDisabled} onClick={onClear} type="button">
           <ArrowCounterClockwise aria-hidden="true" size={16} />
           Clear marks

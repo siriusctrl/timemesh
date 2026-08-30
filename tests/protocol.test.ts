@@ -101,6 +101,22 @@ describe("TimeMesh Token v2", () => {
     expect(decodeBaseToken(encodeBaseToken(base)).slotCount).toBe(188);
   });
 
+  test("maps minute-precise weekday hours and rejects an inverted range", () => {
+    const base = createBaseAllocation({
+      startDate: "2026-09-01",
+      days: 1,
+      timezone: "UTC",
+    });
+    const workHours = workHoursSlotSet(base, "UTC", 7 * 60 + 30, 21 * 60 + 15);
+
+    expect(workHours.size).toBe(55);
+    expect(workHours.has(29)).toBe(false);
+    expect(workHours.has(30)).toBe(true);
+    expect(workHours.has(84)).toBe(true);
+    expect(workHours.has(85)).toBe(false);
+    expect(() => workHoursSlotSet(base, "UTC", 20 * 60, 8 * 60)).toThrowError(/ordered range/u);
+  });
+
   test("decodes a whitespace-composed planning bundle", async () => {
     const base = createBaseAllocation({
       startDate: "2026-11-01",
@@ -121,7 +137,7 @@ describe("TimeMesh Token v2", () => {
       timezone: "Asia/Shanghai",
       meetingMinutes: 60,
     });
-    const workHours = workHoursSlotSet(initial, initial.timezone, 9, 18, true);
+    const workHours = workHoursSlotSet(initial, initial.timezone, 9 * 60, 18 * 60, true);
     const unavailable = new Set<number>();
     for (let index = 0; index < initial.slotCount; index += 1) {
       if (!workHours.has(index)) unavailable.add(index);

@@ -16,7 +16,9 @@ test("moves from organizer link to participant response and comparison", async (
   await expect(page.getByText("Create a meeting · mark organizer conflicts")).toBeVisible();
   await expect(page.getByRole("tablist")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Keep weekdays 09:00-18:00" }).click();
+  await expect(page.getByLabel("Weekday hours start")).toHaveValue("08:00");
+  await expect(page.getByLabel("Weekday hours end")).toHaveValue("20:00");
+  await page.getByRole("button", { name: "Keep weekday hours" }).click();
   await page.getByRole("button", { name: "Create meeting link" }).click();
   const outputCode = page.locator(".output-copy code");
   const baseToken = await outputCode.textContent();
@@ -52,7 +54,7 @@ test("moves from organizer link to participant response and comparison", async (
     expect(participantLayout?.bottomGap).toBeLessThanOrEqual(16);
   }
 
-  await page.getByRole("button", { name: "Keep weekdays 09:00-18:00" }).click();
+  await page.getByRole("button", { name: "Mark weekday hours free" }).click();
   await page.getByRole("button", { name: "Generate response" }).click();
   await expect(outputCode).toContainText("tm2p_");
   const participantToken = await outputCode.textContent();
@@ -169,6 +171,24 @@ test("renders the organizer time zone as one unified control", async ({ page }) 
   expect(labelAlignment).toBeLessThan(1);
 });
 
+test("customizes weekday hours and guards an inverted range", async ({ page }) => {
+  await page.goto("./");
+  const start = page.getByLabel("Weekday hours start");
+  const end = page.getByLabel("Weekday hours end");
+  const apply = page.getByRole("button", { name: "Keep weekday hours" });
+
+  await start.fill("21:00");
+  await end.fill("08:00");
+  await expect(page.getByRole("alert")).toHaveText("Choose an end time later than the start.");
+  await expect(apply).toBeDisabled();
+
+  await start.fill("07:30");
+  await end.fill("21:15");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await apply.click();
+  expect(await page.locator(".marked-unavailable").count()).toBeGreaterThan(0);
+});
+
 test("fits a two-week grid without horizontal scrolling and shows the full day", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === "mobile", "desktop grid compression check");
   await page.goto("./");
@@ -180,6 +200,15 @@ test("fits a two-week grid without horizontal scrolling and shows the full day",
   const overflow = await page.locator(".calendar-scroll").evaluate((element) =>
     element.scrollWidth - element.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+
+  const workspaceGeometry = await page.locator(".workspace").evaluate((workspace) => ({
+    bottomGap: window.innerHeight - workspace.getBoundingClientRect().bottom,
+    viewportHeight: window.innerHeight,
+  }));
+  if (workspaceGeometry.viewportHeight >= 800) {
+    expect(workspaceGeometry.bottomGap).toBeGreaterThanOrEqual(0);
+    expect(workspaceGeometry.bottomGap).toBeLessThanOrEqual(18);
+  }
 });
 
 test("keeps the product controls usable on a narrow viewport", async ({ page }, testInfo) => {

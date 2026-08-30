@@ -28,7 +28,7 @@ TimeMesh has no accounts, database, API, or synchronization service. The token i
 ### Create a meeting
 
 1. Choose the date window, organizer time zone, meeting duration, and slot size. Time zones can be found by IANA name or major-city aliases such as San Francisco and Miami; the stored value remains canonical. The default grid is 15 minutes and the maximum window is 31 local calendar days.
-2. Mark organizer-unavailable slots. The weekday 09:00-18:00 preset blocks nights and weekends in one action.
+2. Mark organizer-unavailable slots. The editable weekday-hours preset defaults to 08:00-20:00 and blocks nights and weekends in one action.
 3. Create the meeting link and use **Copy URL**. The URL carries the `tm2b_...` meeting token in its fragment.
 
 ### Respond to a meeting
