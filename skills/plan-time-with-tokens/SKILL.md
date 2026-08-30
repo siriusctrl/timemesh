@@ -9,7 +9,7 @@ Use the bundled deterministic tool for every token operation. Never hand-encode,
 
 ## Resources
 
-- Run `node scripts/time-token.mjs` from this Skill directory for generation, decoding, validation, and comparison. It is self-contained and only requires Node.js 22 or newer.
+- Run `node scripts/time-token.mjs` from this Skill directory for generation, decoding, validation, comparison, and allocation. It is self-contained and only requires Node.js 22 or newer.
 - Read `references/protocol-v2.md` only to review an integration, diagnose a rejected token, or implement a compatible codec.
 
 If only this Markdown file was pasted, download the complete portable package from `https://siriusctrl.github.io/timemesh/plan-time-with-tokens.zip` before running commands. Keep calendar data local.
