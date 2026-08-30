@@ -43,7 +43,10 @@ try {
   await normalizeTimes(stagedSkill);
   await utimes(stagedSkill, fixedTime, fixedTime);
   await rm(archive, { force: true });
-  await run("zip", ["-X", "-q", "-r", archive, skillName], { cwd: stagingRoot });
+  await run("zip", ["-X", "-q", "-r", archive, skillName], {
+    cwd: stagingRoot,
+    env: { ...process.env, TZ: "UTC" },
+  });
   await chmod(archive, 0o644);
 } finally {
   await rm(stagingRoot, { force: true, recursive: true });
