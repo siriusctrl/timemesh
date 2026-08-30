@@ -171,7 +171,7 @@ export default function App() {
       setBaseToken(token);
       setParticipantToken("");
       setTokenInput(token);
-      setNotice({ kind: "success", message: "Meeting link created and verified locally." });
+      setNotice({ kind: "success", message: "Meeting token generated and verified locally." });
     } catch (error) {
       setNotice({ kind: "error", message: errorMessage(error) });
     }
@@ -340,7 +340,7 @@ export default function App() {
             error={notice?.kind === "error" ? notice.message : undefined}
             mode={mode}
             onCopy={(value, type) => void copyText(value, type)}
-            onCreateBase={generateBase}
+            onGenerateBase={generateBase}
             onCreateResponse={() => void generateParticipant()}
             participantCount={participants.length}
             participantToken={participantToken}
