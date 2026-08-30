@@ -82,6 +82,24 @@ test("searches and selects a display time zone", async ({ page }) => {
   await expect(timeZone).toHaveValue("Asia/Tokyo");
 });
 
+test("finds major cities that map to canonical IANA zones", async ({ page }) => {
+  await page.goto("./");
+  const timeZone = page.getByRole("combobox", { name: "Organizer time zone" });
+
+  await timeZone.click();
+  await timeZone.fill("San Francisco");
+  const sanFrancisco = page.getByRole("option", { name: /San Francisco, America\/Los_Angeles/u });
+  await expect(sanFrancisco).toBeVisible();
+  await sanFrancisco.click();
+  await expect(timeZone).toHaveValue("America/Los_Angeles");
+
+  await timeZone.fill("Miami");
+  const miami = page.getByRole("option", { name: /Miami, America\/New_York/u });
+  await expect(miami).toBeVisible();
+  await miami.click();
+  await expect(timeZone).toHaveValue("America/New_York");
+});
+
 test("renders the organizer time zone as one unified control", async ({ page }) => {
   await page.goto("./");
   const input = page.getByRole("combobox", { name: "Organizer time zone" });

@@ -44,6 +44,54 @@ const fallbackTimeZones = [
   "Pacific/Auckland",
 ];
 
+type CityAlias = {
+  label: string;
+  search?: string;
+  timeZone: string;
+};
+
+const majorCityAliases: readonly CityAlias[] = [
+  { label: "San Francisco", timeZone: "America/Los_Angeles", search: "sf bay area silicon valley" },
+  { label: "San Jose", timeZone: "America/Los_Angeles", search: "silicon valley" },
+  { label: "San Diego", timeZone: "America/Los_Angeles" },
+  { label: "Seattle", timeZone: "America/Los_Angeles" },
+  { label: "Portland", timeZone: "America/Los_Angeles" },
+  { label: "Las Vegas", timeZone: "America/Los_Angeles" },
+  { label: "Miami", timeZone: "America/New_York", search: "south florida" },
+  { label: "Boston", timeZone: "America/New_York" },
+  { label: "Washington, DC", timeZone: "America/New_York", search: "washington dc d.c." },
+  { label: "Philadelphia", timeZone: "America/New_York", search: "philly" },
+  { label: "Atlanta", timeZone: "America/New_York" },
+  { label: "Orlando", timeZone: "America/New_York" },
+  { label: "Charlotte", timeZone: "America/New_York" },
+  { label: "Austin", timeZone: "America/Chicago" },
+  { label: "Dallas", timeZone: "America/Chicago" },
+  { label: "Houston", timeZone: "America/Chicago" },
+  { label: "New Orleans", timeZone: "America/Chicago" },
+  { label: "Minneapolis", timeZone: "America/Chicago" },
+  { label: "Nashville", timeZone: "America/Chicago" },
+  { label: "St. Louis", timeZone: "America/Chicago", search: "saint louis" },
+  { label: "Kansas City", timeZone: "America/Chicago" },
+  { label: "Salt Lake City", timeZone: "America/Denver" },
+  { label: "Ottawa", timeZone: "America/Toronto" },
+  { label: "Montreal", timeZone: "America/Toronto", search: "montreal montréal" },
+  { label: "Beijing", timeZone: "Asia/Shanghai", search: "peking" },
+  { label: "Shenzhen", timeZone: "Asia/Shanghai" },
+  { label: "Guangzhou", timeZone: "Asia/Shanghai", search: "canton" },
+  { label: "Mumbai", timeZone: "Asia/Kolkata", search: "bombay" },
+  { label: "New Delhi", timeZone: "Asia/Kolkata", search: "delhi" },
+  { label: "Bengaluru", timeZone: "Asia/Kolkata", search: "bangalore" },
+  { label: "Abu Dhabi", timeZone: "Asia/Dubai" },
+  { label: "Cape Town", timeZone: "Africa/Johannesburg" },
+];
+
+type TimeZoneOption = {
+  alias: boolean;
+  key: string;
+  label: string;
+  timeZone: string;
+};
+
 const offsetCache = new Map<string, string>();
 
 function supportedTimeZones(preferred: string): string[] {
@@ -53,8 +101,15 @@ function supportedTimeZones(preferred: string): string[] {
   return [...new Set([preferred, "UTC", ...values])];
 }
 
-function searchableName(timeZone: string): string {
-  return timeZone.replaceAll("_", " ").replaceAll("/", " ").toLocaleLowerCase();
+function searchableName(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/gu, "")
+    .replaceAll("_", " ")
+    .replaceAll("/", " ")
+    .replace(/[^a-z0-9]+/giu, " ")
+    .trim()
+    .toLocaleLowerCase();
 }
 
 function displayName(timeZone: string): string {
@@ -91,17 +146,34 @@ export function TimeZoneSelect({
   const inputId = id ?? `timezone-${generatedId}`;
   const listId = `${inputId}-options`;
   const timeZones = useMemo(() => supportedTimeZones(value), [value]);
+  const canonicalOptions = useMemo<TimeZoneOption[]>(() => timeZones.map((timeZone) => ({
+    alias: false,
+    key: `zone:${timeZone}`,
+    label: displayName(timeZone),
+    timeZone,
+  })), [timeZones]);
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => setQuery(value), [value]);
 
-  const filteredTimeZones = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase();
-    if (!normalized || normalized === value.toLocaleLowerCase()) return timeZones;
-    return timeZones.filter((timeZone) => searchableName(timeZone).includes(normalized));
-  }, [query, timeZones, value]);
+  const filteredOptions = useMemo<TimeZoneOption[]>(() => {
+    const normalized = searchableName(query);
+    if (!normalized || normalized === searchableName(value)) return canonicalOptions;
+
+    const aliasOptions = majorCityAliases
+      .filter(({ timeZone }) => timeZones.includes(timeZone))
+      .filter(({ label, search = "" }) => searchableName(`${label} ${search}`).includes(normalized))
+      .map(({ label, timeZone }) => ({
+        alias: true,
+        key: `city:${label}:${timeZone}`,
+        label,
+        timeZone,
+      }));
+    const matchingZones = canonicalOptions.filter(({ timeZone }) => searchableName(timeZone).includes(normalized));
+    return [...aliasOptions, ...matchingZones];
+  }, [canonicalOptions, query, timeZones, value]);
 
   const selectTimeZone = (timeZone: string) => {
     setQuery(timeZone);
@@ -113,7 +185,7 @@ export function TimeZoneSelect({
   const openOptions = () => {
     if (disabled) return;
     setOpen(true);
-    setActiveIndex(Math.max(0, filteredTimeZones.indexOf(value)));
+    setActiveIndex(Math.max(0, filteredOptions.findIndex((option) => option.timeZone === value)));
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -132,14 +204,14 @@ export function TimeZoneSelect({
       const direction = event.key === "ArrowDown" ? 1 : -1;
       setActiveIndex((current) => Math.min(
         Math.max(current + direction, 0),
-        Math.max(filteredTimeZones.length - 1, 0),
+        Math.max(filteredOptions.length - 1, 0),
       ));
       return;
     }
 
-    if (event.key === "Enter" && open && filteredTimeZones[activeIndex]) {
+    if (event.key === "Enter" && open && filteredOptions[activeIndex]) {
       event.preventDefault();
-      selectTimeZone(filteredTimeZones[activeIndex]);
+      selectTimeZone(filteredOptions[activeIndex].timeZone);
     }
   };
 
@@ -149,7 +221,7 @@ export function TimeZoneSelect({
       <div className="timezone-control" data-open={open || undefined}>
         <MagnifyingGlass aria-hidden="true" size={14} />
         <input
-          aria-activedescendant={open && filteredTimeZones[activeIndex]
+          aria-activedescendant={open && filteredOptions[activeIndex]
             ? `${listId}-${activeIndex}`
             : undefined}
           aria-autocomplete="list"
@@ -190,21 +262,27 @@ export function TimeZoneSelect({
       </div>
       {open ? (
         <ul aria-label={`${ariaLabel} options`} className="timezone-options" id={listId} role="listbox">
-          {filteredTimeZones.length > 0 ? filteredTimeZones.map((timeZone, index) => (
+          {filteredOptions.length > 0 ? filteredOptions.map((option, index) => (
             <li
-              aria-selected={timeZone === value}
+              aria-label={option.alias
+                ? `${option.label}, ${option.timeZone}, ${offsetName(option.timeZone)}`
+                : `${option.label}, ${offsetName(option.timeZone)}`}
+              aria-selected={option.timeZone === value}
               data-active={index === activeIndex || undefined}
               id={`${listId}-${index}`}
-              key={timeZone}
+              key={option.key}
               onMouseDown={(event) => {
                 event.preventDefault();
-                selectTimeZone(timeZone);
+                selectTimeZone(option.timeZone);
               }}
               onMouseEnter={() => setActiveIndex(index)}
               role="option"
             >
-              <span>{displayName(timeZone)}</span>
-              <small>{offsetName(timeZone)}</small>
+              <span className={option.alias ? "timezone-city-option" : undefined}>
+                {option.label}
+                {option.alias ? <small>{option.timeZone}</small> : null}
+              </span>
+              <small>{offsetName(option.timeZone)}</small>
             </li>
           )) : (
             <li className="timezone-empty">No matching IANA time zone</li>

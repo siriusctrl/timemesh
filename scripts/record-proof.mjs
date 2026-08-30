@@ -52,8 +52,11 @@ try {
   await desktop.waitForTimeout(700);
   await capture(desktop, "01-base-workbench");
 
-  await desktop.getByRole("combobox", { name: "Display time zone" }).click();
-  await capture(desktop, "02-timezone-picker", false);
+  const displayTimeZone = desktop.getByRole("combobox", { name: "Display time zone" });
+  await displayTimeZone.click();
+  await displayTimeZone.fill("San Francisco");
+  await desktop.getByRole("option", { name: /San Francisco, America\/Los_Angeles/u }).waitFor();
+  await capture(desktop, "02-city-timezone-search", false);
   await desktop.keyboard.press("Escape");
 
   await desktop.getByRole("button", { name: "Keep weekdays 09:00-18:00" }).click();

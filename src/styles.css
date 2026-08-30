@@ -545,6 +545,19 @@ main {
   white-space: nowrap;
 }
 
+.timezone-city-option {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+  color: var(--ink);
+}
+
+.timezone-city-option small {
+  overflow: hidden;
+  max-width: 150px;
+  text-overflow: ellipsis;
+}
+
 .timezone-options .timezone-empty {
   cursor: default;
   color: var(--faint);
