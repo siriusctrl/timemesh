@@ -98,6 +98,32 @@ test("moves from organizer link to participant response and comparison", async (
   await page.getByRole("button", { name: "Open tokens" }).click();
   await expect(page.getByText("Best shared time")).toBeVisible();
   await expect(page.getByLabel("TimeMesh tokens")).toHaveValue(/tm2b_[A-Za-z0-9_-]+\ntm2p_[A-Za-z0-9_-]+\ntm2p_[A-Za-z0-9_-]+/u);
+  const comparisonColors = await page.locator(".heat-slot").evaluateAll((slots) => slots.map((slot) => ({
+    background: getComputedStyle(slot).backgroundColor,
+    strength: Number.parseFloat(getComputedStyle(slot).getPropertyValue("--heat-strength")),
+  })));
+  expect(comparisonColors.some((slot) => slot.strength > 0)).toBe(true);
+  expect(new Set(comparisonColors.map((slot) => slot.strength)).size).toBeGreaterThan(1);
+  expect(new Set(comparisonColors.map((slot) => slot.background)).size).toBeGreaterThan(1);
+});
+
+test("renders overlap heat for an imported comparison bundle", async ({ page }) => {
+  const bundle = [
+    "tm2b_DwA8Aca3gAVADUFzaWEvU2hhbmdoYWkCgAEwMDAwMDAwMDDwATAwMDAwMDAwMHDCRKfh",
+    "tm2p_wsxW_v-viFsFQAGEAQRcBFwMVARcBLgG2gESQA",
+    "tm2p_wsxW_v-viFsFQAGIAQRbBVsFXARcBLQGaqclKg",
+  ].join("\n");
+
+  await page.goto("./");
+  await page.getByLabel("TimeMesh tokens").fill(bundle);
+  await page.getByRole("button", { name: "Open tokens" }).click();
+  await expect(page.getByText("Loaded 2 responses for comparison.")).toBeVisible();
+  await expect(page.getByText("Best shared time")).toBeVisible();
+  const strengths = await page.locator(".heat-slot").evaluateAll((slots) => slots.map((slot) =>
+    Number.parseFloat(getComputedStyle(slot).getPropertyValue("--heat-strength"))
+  ));
+  expect(strengths.some((strength) => strength > 0)).toBe(true);
+  expect(strengths.some((strength) => strength === 82)).toBe(true);
 });
 
 test("restores a generated base through the token console", async ({ page }) => {

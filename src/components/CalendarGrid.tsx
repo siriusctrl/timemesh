@@ -134,6 +134,7 @@ export function CalendarGrid({
                 const active = workspace === "organizer" ? selected.has(slot.index) : workspace === "response" && selected.has(slot.index);
                 const score = scores[slot.index] ?? 0;
                 const ratio = participantCount > 0 ? score / participantCount : 0;
+                const heatStyle = { "--heat-strength": `${Math.round(ratio * 82)}%` } as React.CSSProperties;
                 const classNames = [
                   "time-slot",
                   slot.minute === 0 ? "hour-start" : "",
@@ -142,7 +143,7 @@ export function CalendarGrid({
                   workspace === "comparison" && !hostBlocked ? "heat-slot" : "",
                 ].filter(Boolean).join(" ");
                 if (workspace === "comparison") {
-                  return <span aria-label={`${day.weekdayLabel} ${day.dateLabel} ${slot.timeLabel}: ${statusForSlot(slot.index)}`} className={classNames} key={slot.index} role="img" />;
+                  return <span aria-label={`${day.weekdayLabel} ${day.dateLabel} ${slot.timeLabel}: ${statusForSlot(slot.index)}`} className={classNames} key={slot.index} role="img" style={heatStyle} />;
                 }
                 return (
                   <button
@@ -171,7 +172,7 @@ export function CalendarGrid({
                     onPointerEnter={() => {
                       if (dragging.current) setSlot(slot.index, dragValue.current);
                     }}
-                    style={{ "--heat-strength": `${Math.round(ratio * 82)}%` } as React.CSSProperties}
+                    style={heatStyle}
                     tabIndex={slot.index === focusedSlot ? 0 : -1}
                     title={`${slot.timeLabel} ${slot.offset} - ${statusForSlot(slot.index)}`}
                     type="button"
