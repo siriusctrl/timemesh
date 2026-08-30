@@ -18,6 +18,23 @@ export type CandidateWindowOptions = {
   diversifyDays?: boolean;
 };
 
+export type IndividualMeetingAssignment = {
+  participantIndex: number;
+  startSlot: number;
+  endSlot: number;
+  individualRank: number;
+  preferredSlotCount: number;
+};
+
+export type IndividualAllocation = {
+  assignments: IndividualMeetingAssignment[];
+  unassignedParticipantIndexes: number[];
+  candidateCounts: number[];
+  meetingsAssigned: number;
+  preferredSlotCount: number;
+  individualRankTotal: number;
+};
+
 export function availabilityScores(
   base: BaseAllocation,
   participants: ParticipantAllocation[],
@@ -110,4 +127,126 @@ export function findCandidateWindows(
     }
   }
   return ranked;
+}
+
+export function allocateIndividualMeetings(
+  base: BaseAllocation,
+  participants: ParticipantAllocation[],
+  options: Pick<CandidateWindowOptions, "allowedSlots" | "preferredSlots"> = {},
+): IndividualAllocation {
+  const durationSlots = base.meetingMinutes / base.slotMinutes;
+  const candidatesByParticipant = participants.map((participant, participantIndex) =>
+    findCandidateWindows(base, [participant], {
+      ...options,
+      diversifyDays: false,
+      limit: base.slotCount,
+      minimumAttendees: 1,
+    }).map((candidate, index) => ({
+      participantIndex,
+      startSlot: candidate.startSlot,
+      endSlot: candidate.endSlot,
+      individualRank: index + 1,
+      preferredSlotCount: candidate.preferredSlotCount,
+    }))
+  );
+  const participantOrder = participants.map((_, participantIndex) => participantIndex).sort(
+    (left, right) => candidatesByParticipant[left].length - candidatesByParticipant[right].length || left - right,
+  );
+  const currentAssignments: Array<IndividualMeetingAssignment | undefined> = Array(participants.length);
+  const occupiedStarts: number[] = [];
+  let best: IndividualAllocation | null = null;
+
+  const overlaps = (candidate: IndividualMeetingAssignment) => occupiedStarts.some((startSlot) =>
+    candidate.startSlot < startSlot + durationSlots && candidate.endSlot > startSlot
+  );
+  const snapshot = (preferredSlotCount: number, individualRankTotal: number): IndividualAllocation => {
+    const assignments = currentAssignments.filter((assignment): assignment is IndividualMeetingAssignment =>
+      assignment !== undefined
+    ).sort((left, right) => left.participantIndex - right.participantIndex);
+    const assigned = new Set(assignments.map((assignment) => assignment.participantIndex));
+    return {
+      assignments,
+      unassignedParticipantIndexes: participants
+        .map((_, participantIndex) => participantIndex)
+        .filter((participantIndex) => !assigned.has(participantIndex)),
+      candidateCounts: candidatesByParticipant.map((candidates) => candidates.length),
+      meetingsAssigned: assignments.length,
+      preferredSlotCount,
+      individualRankTotal,
+    };
+  };
+  const isBetter = (candidate: IndividualAllocation, incumbent: IndividualAllocation | null): boolean => {
+    if (!incumbent) return true;
+    if (candidate.meetingsAssigned !== incumbent.meetingsAssigned) {
+      return candidate.meetingsAssigned > incumbent.meetingsAssigned;
+    }
+    if (candidate.preferredSlotCount !== incumbent.preferredSlotCount) {
+      return candidate.preferredSlotCount > incumbent.preferredSlotCount;
+    }
+    if (candidate.individualRankTotal !== incumbent.individualRankTotal) {
+      return candidate.individualRankTotal < incumbent.individualRankTotal;
+    }
+    for (let participantIndex = 0; participantIndex < participants.length; participantIndex += 1) {
+      const candidateStart = candidate.assignments.find((assignment) =>
+        assignment.participantIndex === participantIndex
+      )?.startSlot ?? Number.POSITIVE_INFINITY;
+      const incumbentStart = incumbent.assignments.find((assignment) =>
+        assignment.participantIndex === participantIndex
+      )?.startSlot ?? Number.POSITIVE_INFINITY;
+      if (candidateStart !== incumbentStart) return candidateStart < incumbentStart;
+    }
+    return false;
+  };
+
+  const visit = (
+    orderIndex: number,
+    preferredSlotCount: number,
+    individualRankTotal: number,
+  ) => {
+    if (orderIndex === participantOrder.length) {
+      const candidate = snapshot(preferredSlotCount, individualRankTotal);
+      if (isBetter(candidate, best)) best = candidate;
+      return;
+    }
+
+    const remainingIndexes = participantOrder.slice(orderIndex);
+    const compatibleByParticipant = remainingIndexes.map((participantIndex) =>
+      candidatesByParticipant[participantIndex].filter((candidate) => !overlaps(candidate))
+    );
+    const possibleCount = compatibleByParticipant.filter((candidates) => candidates.length > 0).length;
+    const assignedCount = occupiedStarts.length;
+    if (best && assignedCount + possibleCount < best.meetingsAssigned) return;
+    if (best && assignedCount + possibleCount === best.meetingsAssigned) {
+      const preferredUpperBound = preferredSlotCount + compatibleByParticipant.reduce(
+        (total, candidates) => total + Math.max(0, ...candidates.map((candidate) => candidate.preferredSlotCount)),
+        0,
+      );
+      if (preferredUpperBound < best.preferredSlotCount) return;
+      if (preferredUpperBound === best.preferredSlotCount) {
+        const rankLowerBound = individualRankTotal + compatibleByParticipant.reduce(
+          (total, candidates) => total + (candidates[0]?.individualRank ?? 0),
+          0,
+        );
+        if (rankLowerBound > best.individualRankTotal) return;
+      }
+    }
+
+    const participantIndex = participantOrder[orderIndex];
+    for (const candidate of candidatesByParticipant[participantIndex]) {
+      if (overlaps(candidate)) continue;
+      currentAssignments[participantIndex] = candidate;
+      occupiedStarts.push(candidate.startSlot);
+      visit(
+        orderIndex + 1,
+        preferredSlotCount + candidate.preferredSlotCount,
+        individualRankTotal + candidate.individualRank,
+      );
+      occupiedStarts.pop();
+      currentAssignments[participantIndex] = undefined;
+    }
+    visit(orderIndex + 1, preferredSlotCount, individualRankTotal);
+  };
+
+  visit(0, 0, 0);
+  return best ?? snapshot(0, 0);
 }

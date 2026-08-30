@@ -115,4 +115,62 @@ describe("portable TimeMesh Skill CLI", () => {
       fullyPreferred: true,
     });
   });
+
+  test("allocates one non-overlapping meeting per named response from outside the repository", async () => {
+    const directory = await temporaryDirectory();
+    const base = createBaseAllocation({
+      startDate: "2026-09-01",
+      days: 1,
+      timezone: "UTC",
+      meetingMinutes: 60,
+    });
+    const baseToken = encodeBaseToken(base);
+    const responseTokens = await Promise.all([
+      encodeParticipantToken(baseToken, base, [36, 37, 38, 39, 40, 41, 42, 43]),
+      encodeParticipantToken(baseToken, base, [36, 37, 38, 39]),
+      encodeParticipantToken(baseToken, base, []),
+    ]);
+    const bundlePath = path.join(directory, "individual-bundles.txt");
+    await writeFile(bundlePath, [
+      `Jordan | ${baseToken}`,
+      `Alice | ${responseTokens[0]}`,
+      `Bob | ${responseTokens[1]}`,
+      `Cara | ${responseTokens[2]}`,
+    ].join("\n"));
+
+    const { stdout } = await run(process.execPath, [
+      cli,
+      "allocate",
+      "--bundle-file",
+      bundlePath,
+      "--timezone",
+      "UTC",
+    ], { cwd: directory });
+    const result = JSON.parse(stdout) as {
+      objective: { meetingsAssigned: number };
+      assignments: Array<{ responseName: string; start: string; end: string }>;
+      unassignedResponses: Array<{ responseName: string; reason: string; candidateCount: number }>;
+      noOrganizerOverlap: boolean;
+      validation: string;
+    };
+
+    expect(result.objective.meetingsAssigned).toBe(2);
+    expect(result.assignments).toEqual([
+      expect.objectContaining({
+        responseName: "Bob",
+        start: "2026-09-01T09:00:00+00:00[UTC]",
+        end: "2026-09-01T10:00:00+00:00[UTC]",
+      }),
+      expect.objectContaining({
+        responseName: "Alice",
+        start: "2026-09-01T10:00:00+00:00[UTC]",
+        end: "2026-09-01T11:00:00+00:00[UTC]",
+      }),
+    ]);
+    expect(result.unassignedResponses).toEqual([
+      { responseNumber: 3, responseName: "Cara", reason: "no-feasible-window", candidateCount: 0 },
+    ]);
+    expect(result.noOrganizerOverlap).toBe(true);
+    expect(result.validation).toBe("VALID allocation");
+  });
 });

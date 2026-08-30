@@ -11,7 +11,7 @@ import {
   encodeParticipantToken,
   formatTokenBundle,
 } from "../../../src/protocol/codec";
-import { findCandidateWindows } from "../../../src/protocol/planner";
+import { allocateIndividualMeetings, findCandidateWindows } from "../../../src/protocol/planner";
 import {
   baseStartDate,
   baseWindowDays,
@@ -34,6 +34,7 @@ function usage(): never {
   time-token base --start YYYY-MM-DD --days N --timezone Area/City [--slot 15] [--meeting 60] [--unavailable-json path]
   time-token participant --base tm2b_... --free-json path [--output token|bundle] [--name NAME] [--base-name NAME]
   time-token compare --bundle-file path [--preferences-json path] [--timezone Area/City] [--limit 12]
+  time-token allocate --bundle-file path [--preferences-json path] [--timezone Area/City]
   time-token validate TOKEN [--base tm2b_...]
   time-token decode TOKEN [--base tm2b_...]`);
   process.exit(2);
@@ -264,6 +265,71 @@ try {
         preferredSlotCount: candidate.preferredSlotCount,
         fullyPreferred: preferredSlots !== undefined && candidate.preferredSlotCount === durationSlots,
       })),
+    }, null, 2));
+  } else if (command === "allocate") {
+    const args = parseArgs(process.argv.slice(3));
+    const bundlePath = resolve(required(args, "bundle-file"));
+    const bundle = await decodeTokenBundle(await readFile(bundlePath, "utf8"));
+    const preferences = args.get("preferences-json")
+      ? await readPreferences(required(args, "preferences-json"))
+      : {};
+    if (preferences.minimumAttendees !== undefined) {
+      throw new Error("minimumAttendees applies only to compare; allocate always schedules at most one meeting per response.");
+    }
+    const displayTimezone = timeZoneOrThrow(args.get("timezone") ?? bundle.base.timezone);
+    const allowedSlots = preferences.allowedRanges === undefined
+      ? undefined
+      : rangesToSlotSet(bundle.base, preferences.allowedRanges, "free");
+    const preferredSlots = preferences.preferredRanges === undefined
+      ? undefined
+      : rangesToSlotSet(bundle.base, preferences.preferredRanges, "free");
+    const allocation = allocateIndividualMeetings(bundle.base, bundle.participants, {
+      allowedSlots,
+      preferredSlots,
+    });
+    const durationSlots = bundle.base.meetingMinutes / bundle.base.slotMinutes;
+    const responseName = (participantIndex: number) =>
+      bundle.participantLabels[participantIndex] || `Response ${participantIndex + 1}`;
+    console.log(JSON.stringify({
+      kind: "allocation",
+      base: baseSummary(bundle.base),
+      displayTimezone,
+      responseCount: bundle.participants.length,
+      preferences,
+      rankingPolicy: [
+        "Organizer availability, allowedRanges, one meeting per response, and no organizer overlap are hard constraints.",
+        "More successfully assigned responses ranks first.",
+        "More preferred-range slots across the allocation ranks next.",
+        "Lower individual candidate ranks break remaining ties.",
+        "Response order and earlier starts stabilize exact ties.",
+      ],
+      objective: {
+        meetingsAssigned: allocation.meetingsAssigned,
+        preferredSlotCount: allocation.preferredSlotCount,
+        individualRankTotal: allocation.individualRankTotal,
+      },
+      assignments: allocation.assignments
+        .slice()
+        .sort((left, right) => left.startSlot - right.startSlot || left.participantIndex - right.participantIndex)
+        .map((assignment) => ({
+          responseNumber: assignment.participantIndex + 1,
+          responseName: responseName(assignment.participantIndex),
+          start: slotInstant(bundle.base, assignment.startSlot).toZonedDateTimeISO(displayTimezone).toString(),
+          end: slotInstant(bundle.base, assignment.endSlot).toZonedDateTimeISO(displayTimezone).toString(),
+          individualRank: assignment.individualRank,
+          preferredSlotCount: assignment.preferredSlotCount,
+          fullyPreferred: preferredSlots !== undefined && assignment.preferredSlotCount === durationSlots,
+        })),
+      unassignedResponses: allocation.unassignedParticipantIndexes.map((participantIndex) => ({
+        responseNumber: participantIndex + 1,
+        responseName: responseName(participantIndex),
+        candidateCount: allocation.candidateCounts[participantIndex],
+        reason: allocation.candidateCounts[participantIndex] === 0
+          ? "no-feasible-window"
+          : "schedule-conflict",
+      })),
+      noOrganizerOverlap: true,
+      validation: "VALID allocation",
     }, null, 2));
   } else if (command === "validate" || command === "decode") {
     if (!tokenArgument) usage();

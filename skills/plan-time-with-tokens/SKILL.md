@@ -1,6 +1,6 @@
 ---
 name: plan-time-with-tokens
-description: Create, answer, revise, decode, validate, and compare TimeMesh meetings entirely through local tm2b_ and tm2p_ tokens. Use when an agent receives a TimeMesh base or response bundle, needs to turn natural-language availability into a validated response, explain organizer conflicts, create a meeting token, or rank shared meeting windows with optional organizer preferences.
+description: Create, answer, revise, decode, validate, compare, and allocate TimeMesh meetings entirely through local tm2b_ and tm2p_ tokens. Use when an agent receives a TimeMesh base or response bundle, needs to turn natural-language availability into a validated response, explain organizer conflicts, create a meeting token, rank one shared meeting, or assign one non-overlapping meeting per response with optional organizer preferences.
 ---
 
 # Plan Time with Tokens
@@ -22,7 +22,7 @@ Preserve an optional `Name | token` prefix as display metadata. Names stay outsi
 
 - With no base token, help create a meeting.
 - With one base and zero or one response, help create or revise that response.
-- With one base and multiple responses, validate the bundle and rank shared windows.
+- With one base and multiple responses, validate the bundle and determine whether the organizer wants one shared meeting or one separate meeting per response. Do not treat those as the same optimization.
 - Reject multiple bases, participant tokens without their exact base, and mismatched participant tokens.
 
 Decode the base first. Tell the user its date window, organizer time zone, slot size, meeting duration, and organizer-unavailable ranges in a useful display time zone. If the user's time zone is missing and cannot be inferred safely, ask for it before interpreting phrases such as “Tuesday afternoon.”
@@ -75,7 +75,7 @@ node scripts/time-token.mjs decode 'tm2p_...' --base 'tm2b_...'
 
 Compare decoded ranges with the intended schedule. On any mismatch, fix the range input and regenerate; never edit the token.
 
-## Compare collected responses
+## Find one shared meeting
 
 Put the collected response bundles in one text file. Repeated copies of the same base are normalized; distinct bases and mismatched responses are rejected. Run:
 
@@ -104,6 +104,18 @@ node scripts/time-token.mjs compare --bundle-file /absolute/path/bundles.txt --p
 ```
 
 `allowedRanges` and `minimumAttendees` are hard constraints. `preferredRanges` only breaks ties between windows with equal attendance; it never silently ranks fewer available people above more available people. Show the user the top candidates and scoring fields, then let the organizer choose. Do not claim that the first candidate captures preferences that were not supplied.
+
+## Assign one meeting per response
+
+When the organizer wants a separate meeting with each respondent, run one joint allocation instead of comparing each response independently:
+
+```sh
+node scripts/time-token.mjs allocate --bundle-file /absolute/path/bundles.txt --timezone Area/City
+```
+
+The allocator chooses at most one full meeting for each response and never double-books the organizer. Its deterministic objective is, in order: assign more responses, cover more organizer-preferred slots, minimize the sum of each response's individual candidate rank, then stabilize exact ties by response order and earlier starts. It may move a flexible respondent away from their individually earliest time so a more constrained respondent can still be scheduled.
+
+`allowedRanges` and `preferredRanges` use the same optional preferences file shown above. `minimumAttendees` belongs only to shared comparison and is rejected by `allocate`. Report every assignment and any `unassignedResponses`; distinguish `no-feasible-window` from `schedule-conflict`. The allocation is a planning result, not a new token, and the organizer still makes the final choice.
 
 ## Handoff
 

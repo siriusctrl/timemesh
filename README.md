@@ -1,6 +1,6 @@
 # TimeMesh
 
-TimeMesh exchanges availability and finds shared meeting times with portable tokens. It has no accounts, database, API, or synchronization service: the static app edits, validates, and compares data carried by the tokens themselves.
+TimeMesh exchanges availability and plans meetings with portable tokens. It has no accounts, database, API, or synchronization service: the static app and Agent Skill edit, validate, compare, and allocate data carried by the tokens themselves.
 
 **Public app:** <https://siriusctrl.github.io/timemesh/>
 
@@ -52,7 +52,7 @@ The compact token console stays available in every workspace. It recognizes a me
 - Tokens are deterministic, reversible, and protected against accidental corruption by a checksum. They are not encrypted or access-controlled.
 - Calendar selections, imported tokens, and comparison results stay in browser memory. Only an explicit light/dark override is stored locally; otherwise the interface follows the system theme. Manual switches use a motion-aware radial reveal.
 - The app is a static Vite build under `/timemesh/` and has no runtime network dependency.
-- The downloadable Agent Skill includes a self-contained Node.js CLI for encoding, organizer-conflict reporting, round-trip validation, and multi-response ranking. It can create a meeting, turn natural-language availability plus a base token into a complete response bundle, or compare collected bundles without the repository, web app, or backend.
+- The downloadable Agent Skill includes a self-contained Node.js CLI for encoding, organizer-conflict reporting, round-trip validation, shared-window ranking, and non-overlapping individual allocation. It can create a meeting, turn natural-language availability plus a base token into a complete response bundle, find one meeting for everyone, or assign one meeting per response without the repository, web app, or backend.
 
 ## URL forms
 
@@ -149,6 +149,17 @@ npm run token -- compare \
 ```
 
 Preferences are optional and stay outside canonical tokens. `allowedRanges` and `minimumAttendees` are hard constraints; `preferredRanges` breaks ties only after attendance. The JSON result exposes candidate times, attendance counts, response numbers, and preference matches so the organizer makes the final choice. See the [Agent Skill](skills/plan-time-with-tokens/SKILL.md) for the input shape and portable command.
+
+Assign one non-overlapping meeting per response:
+
+```sh
+npm run token -- allocate \
+  --bundle-file availability/collected-bundles.txt \
+  --preferences-json availability/owner-preferences.json \
+  --timezone Asia/Shanghai
+```
+
+The allocation first maximizes how many respondents can be scheduled, then applies `preferredRanges`, individual candidate rank, response order, and start time as transparent tie-breaks. Organizer availability, `allowedRanges`, one meeting per response, and no organizer overlap are hard constraints. `minimumAttendees` applies only to shared comparison.
 
 ## Verification
 

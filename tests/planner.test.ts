@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { createBitset } from "../src/protocol/bits";
-import { findCandidateWindows } from "../src/protocol/planner";
+import { allocateIndividualMeetings, findCandidateWindows } from "../src/protocol/planner";
 import { createBaseAllocation } from "../src/protocol/time";
 import { PROTOCOL_VERSION, type ParticipantAllocation } from "../src/protocol/types";
 
@@ -106,5 +106,52 @@ describe("overlap planner", () => {
 
     expect(best.startSlot).toBe(48);
     expect(best.preferredSlotCount).toBe(2);
+  });
+
+  test("backtracks to assign one non-overlapping meeting per participant", () => {
+    const base = createBaseAllocation({
+      startDate: "2026-09-01",
+      days: 1,
+      timezone: "UTC",
+      meetingMinutes: 60,
+    });
+    const participant = (indices: number[]): ParticipantAllocation => ({
+      version: PROTOCOL_VERSION,
+      kind: "participant",
+      baseRef: new Uint8Array(8),
+      free: createBitset(base.slotCount, indices),
+    });
+    const allocation = allocateIndividualMeetings(base, [
+      participant([36, 37, 38, 39, 40, 41, 42, 43]),
+      participant([36, 37, 38, 39]),
+    ]);
+
+    expect(allocation.meetingsAssigned).toBe(2);
+    expect(allocation.unassignedParticipantIndexes).toEqual([]);
+    expect(allocation.assignments).toEqual([
+      expect.objectContaining({ participantIndex: 0, startSlot: 40, endSlot: 44, individualRank: 5 }),
+      expect.objectContaining({ participantIndex: 1, startSlot: 36, endSlot: 40, individualRank: 1 }),
+    ]);
+  });
+
+  test("uses response order to resolve an unavoidable individual scheduling conflict", () => {
+    const base = createBaseAllocation({
+      startDate: "2026-09-01",
+      days: 1,
+      timezone: "UTC",
+      meetingMinutes: 60,
+    });
+    const participant = (): ParticipantAllocation => ({
+      version: PROTOCOL_VERSION,
+      kind: "participant",
+      baseRef: new Uint8Array(8),
+      free: createBitset(base.slotCount, [36, 37, 38, 39]),
+    });
+    const allocation = allocateIndividualMeetings(base, [participant(), participant()]);
+
+    expect(allocation.meetingsAssigned).toBe(1);
+    expect(allocation.assignments[0]).toMatchObject({ participantIndex: 0, startSlot: 36 });
+    expect(allocation.unassignedParticipantIndexes).toEqual([1]);
+    expect(allocation.candidateCounts).toEqual([1, 1]);
   });
 });

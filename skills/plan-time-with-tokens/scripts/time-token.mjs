@@ -1594,6 +1594,112 @@ function findCandidateWindows(base, participants, optionsOrLimit = {}) {
   }
   return ranked;
 }
+function allocateIndividualMeetings(base, participants, options = {}) {
+  const durationSlots = base.meetingMinutes / base.slotMinutes;
+  const candidatesByParticipant = participants.map(
+    (participant, participantIndex) => findCandidateWindows(base, [participant], {
+      ...options,
+      diversifyDays: false,
+      limit: base.slotCount,
+      minimumAttendees: 1
+    }).map((candidate, index) => ({
+      participantIndex,
+      startSlot: candidate.startSlot,
+      endSlot: candidate.endSlot,
+      individualRank: index + 1,
+      preferredSlotCount: candidate.preferredSlotCount
+    }))
+  );
+  const participantOrder = participants.map((_2, participantIndex) => participantIndex).sort(
+    (left, right) => candidatesByParticipant[left].length - candidatesByParticipant[right].length || left - right
+  );
+  const currentAssignments = Array(participants.length);
+  const occupiedStarts = [];
+  let best = null;
+  const overlaps = (candidate) => occupiedStarts.some(
+    (startSlot) => candidate.startSlot < startSlot + durationSlots && candidate.endSlot > startSlot
+  );
+  const snapshot = (preferredSlotCount, individualRankTotal) => {
+    const assignments = currentAssignments.filter(
+      (assignment) => assignment !== void 0
+    ).sort((left, right) => left.participantIndex - right.participantIndex);
+    const assigned = new Set(assignments.map((assignment) => assignment.participantIndex));
+    return {
+      assignments,
+      unassignedParticipantIndexes: participants.map((_2, participantIndex) => participantIndex).filter((participantIndex) => !assigned.has(participantIndex)),
+      candidateCounts: candidatesByParticipant.map((candidates) => candidates.length),
+      meetingsAssigned: assignments.length,
+      preferredSlotCount,
+      individualRankTotal
+    };
+  };
+  const isBetter = (candidate, incumbent) => {
+    if (!incumbent) return true;
+    if (candidate.meetingsAssigned !== incumbent.meetingsAssigned) {
+      return candidate.meetingsAssigned > incumbent.meetingsAssigned;
+    }
+    if (candidate.preferredSlotCount !== incumbent.preferredSlotCount) {
+      return candidate.preferredSlotCount > incumbent.preferredSlotCount;
+    }
+    if (candidate.individualRankTotal !== incumbent.individualRankTotal) {
+      return candidate.individualRankTotal < incumbent.individualRankTotal;
+    }
+    for (let participantIndex = 0; participantIndex < participants.length; participantIndex += 1) {
+      const candidateStart = candidate.assignments.find(
+        (assignment) => assignment.participantIndex === participantIndex
+      )?.startSlot ?? Number.POSITIVE_INFINITY;
+      const incumbentStart = incumbent.assignments.find(
+        (assignment) => assignment.participantIndex === participantIndex
+      )?.startSlot ?? Number.POSITIVE_INFINITY;
+      if (candidateStart !== incumbentStart) return candidateStart < incumbentStart;
+    }
+    return false;
+  };
+  const visit = (orderIndex, preferredSlotCount, individualRankTotal) => {
+    if (orderIndex === participantOrder.length) {
+      const candidate = snapshot(preferredSlotCount, individualRankTotal);
+      if (isBetter(candidate, best)) best = candidate;
+      return;
+    }
+    const remainingIndexes = participantOrder.slice(orderIndex);
+    const compatibleByParticipant = remainingIndexes.map(
+      (participantIndex2) => candidatesByParticipant[participantIndex2].filter((candidate) => !overlaps(candidate))
+    );
+    const possibleCount = compatibleByParticipant.filter((candidates) => candidates.length > 0).length;
+    const assignedCount = occupiedStarts.length;
+    if (best && assignedCount + possibleCount < best.meetingsAssigned) return;
+    if (best && assignedCount + possibleCount === best.meetingsAssigned) {
+      const preferredUpperBound = preferredSlotCount + compatibleByParticipant.reduce(
+        (total, candidates) => total + Math.max(0, ...candidates.map((candidate) => candidate.preferredSlotCount)),
+        0
+      );
+      if (preferredUpperBound < best.preferredSlotCount) return;
+      if (preferredUpperBound === best.preferredSlotCount) {
+        const rankLowerBound = individualRankTotal + compatibleByParticipant.reduce(
+          (total, candidates) => total + (candidates[0]?.individualRank ?? 0),
+          0
+        );
+        if (rankLowerBound > best.individualRankTotal) return;
+      }
+    }
+    const participantIndex = participantOrder[orderIndex];
+    for (const candidate of candidatesByParticipant[participantIndex]) {
+      if (overlaps(candidate)) continue;
+      currentAssignments[participantIndex] = candidate;
+      occupiedStarts.push(candidate.startSlot);
+      visit(
+        orderIndex + 1,
+        preferredSlotCount + candidate.preferredSlotCount,
+        individualRankTotal + candidate.individualRank
+      );
+      occupiedStarts.pop();
+      currentAssignments[participantIndex] = void 0;
+    }
+    visit(orderIndex + 1, preferredSlotCount, individualRankTotal);
+  };
+  visit(0, 0, 0);
+  return best ?? snapshot(0, 0);
+}
 
 // node_modules/@js-temporal/polyfill/dist/index.esm.js
 var import_jsbi = __toESM(require_jsbi_cjs(), 1);
@@ -5717,6 +5823,7 @@ function usage() {
   time-token base --start YYYY-MM-DD --days N --timezone Area/City [--slot 15] [--meeting 60] [--unavailable-json path]
   time-token participant --base tm2b_... --free-json path [--output token|bundle] [--name NAME] [--base-name NAME]
   time-token compare --bundle-file path [--preferences-json path] [--timezone Area/City] [--limit 12]
+  time-token allocate --bundle-file path [--preferences-json path] [--timezone Area/City]
   time-token validate TOKEN [--base tm2b_...]
   time-token decode TOKEN [--base tm2b_...]`);
   process.exit(2);
@@ -5908,6 +6015,59 @@ try {
         preferredSlotCount: candidate.preferredSlotCount,
         fullyPreferred: preferredSlots !== void 0 && candidate.preferredSlotCount === durationSlots
       }))
+    }, null, 2));
+  } else if (command === "allocate") {
+    const args = parseArgs(process.argv.slice(3));
+    const bundlePath = resolve(required(args, "bundle-file"));
+    const bundle = await decodeTokenBundle(await readFile(bundlePath, "utf8"));
+    const preferences = args.get("preferences-json") ? await readPreferences(required(args, "preferences-json")) : {};
+    if (preferences.minimumAttendees !== void 0) {
+      throw new Error("minimumAttendees applies only to compare; allocate always schedules at most one meeting per response.");
+    }
+    const displayTimezone = timeZoneOrThrow(args.get("timezone") ?? bundle.base.timezone);
+    const allowedSlots = preferences.allowedRanges === void 0 ? void 0 : rangesToSlotSet(bundle.base, preferences.allowedRanges, "free");
+    const preferredSlots = preferences.preferredRanges === void 0 ? void 0 : rangesToSlotSet(bundle.base, preferences.preferredRanges, "free");
+    const allocation = allocateIndividualMeetings(bundle.base, bundle.participants, {
+      allowedSlots,
+      preferredSlots
+    });
+    const durationSlots = bundle.base.meetingMinutes / bundle.base.slotMinutes;
+    const responseName = (participantIndex) => bundle.participantLabels[participantIndex] || `Response ${participantIndex + 1}`;
+    console.log(JSON.stringify({
+      kind: "allocation",
+      base: baseSummary(bundle.base),
+      displayTimezone,
+      responseCount: bundle.participants.length,
+      preferences,
+      rankingPolicy: [
+        "Organizer availability, allowedRanges, one meeting per response, and no organizer overlap are hard constraints.",
+        "More successfully assigned responses ranks first.",
+        "More preferred-range slots across the allocation ranks next.",
+        "Lower individual candidate ranks break remaining ties.",
+        "Response order and earlier starts stabilize exact ties."
+      ],
+      objective: {
+        meetingsAssigned: allocation.meetingsAssigned,
+        preferredSlotCount: allocation.preferredSlotCount,
+        individualRankTotal: allocation.individualRankTotal
+      },
+      assignments: allocation.assignments.slice().sort((left, right) => left.startSlot - right.startSlot || left.participantIndex - right.participantIndex).map((assignment) => ({
+        responseNumber: assignment.participantIndex + 1,
+        responseName: responseName(assignment.participantIndex),
+        start: slotInstant(bundle.base, assignment.startSlot).toZonedDateTimeISO(displayTimezone).toString(),
+        end: slotInstant(bundle.base, assignment.endSlot).toZonedDateTimeISO(displayTimezone).toString(),
+        individualRank: assignment.individualRank,
+        preferredSlotCount: assignment.preferredSlotCount,
+        fullyPreferred: preferredSlots !== void 0 && assignment.preferredSlotCount === durationSlots
+      })),
+      unassignedResponses: allocation.unassignedParticipantIndexes.map((participantIndex) => ({
+        responseNumber: participantIndex + 1,
+        responseName: responseName(participantIndex),
+        candidateCount: allocation.candidateCounts[participantIndex],
+        reason: allocation.candidateCounts[participantIndex] === 0 ? "no-feasible-window" : "schedule-conflict"
+      })),
+      noOrganizerOverlap: true,
+      validation: "VALID allocation"
     }, null, 2));
   } else if (command === "validate" || command === "decode") {
     if (!tokenArgument) usage();
