@@ -215,6 +215,9 @@ try {
     const args = parseArgs(process.argv.slice(3));
     const bundlePath = resolve(required(args, "bundle-file"));
     const bundle = await decodeTokenBundle(await readFile(bundlePath, "utf8"));
+    if (bundle.participants.length === 0) {
+      throw new Error("compare requires at least one participant response.");
+    }
     const preferences = args.get("preferences-json")
       ? await readPreferences(required(args, "preferences-json"))
       : {};
@@ -270,6 +273,9 @@ try {
     const args = parseArgs(process.argv.slice(3));
     const bundlePath = resolve(required(args, "bundle-file"));
     const bundle = await decodeTokenBundle(await readFile(bundlePath, "utf8"));
+    if (bundle.participants.length === 0) {
+      throw new Error("allocate requires at least one participant response.");
+    }
     const preferences = args.get("preferences-json")
       ? await readPreferences(required(args, "preferences-json"))
       : {};
@@ -298,15 +304,23 @@ try {
       preferences,
       rankingPolicy: [
         "Organizer availability, allowedRanges, one meeting per response, and no organizer overlap are hard constraints.",
-        "More successfully assigned responses ranks first.",
-        "More preferred-range slots across the allocation ranks next.",
-        "Lower individual candidate ranks break remaining ties.",
-        "Response order and earlier starts stabilize exact ties.",
+        "Responses with fewer feasible windows are scheduled first.",
+        "Each response tries organizer-preferred windows before earlier alternatives.",
+        "Search stops once every response is assigned instead of proving one equivalent complete schedule globally best.",
+        "A fixed node budget bounds difficult partial-allocation searches.",
       ],
       objective: {
         meetingsAssigned: allocation.meetingsAssigned,
         preferredSlotCount: allocation.preferredSlotCount,
         individualRankTotal: allocation.individualRankTotal,
+      },
+      search: {
+        strategy: "constrained-first",
+        nodesVisited: allocation.searchNodes,
+        nodeLimit: allocation.searchNodeLimit,
+        limitReached: allocation.searchLimitReached,
+        allResponsesAssigned: allocation.allResponsesAssigned,
+        assignmentCountOptimal: allocation.assignmentCountOptimal,
       },
       assignments: allocation.assignments
         .slice()

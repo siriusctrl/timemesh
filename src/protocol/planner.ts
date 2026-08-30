@@ -33,7 +33,18 @@ export type IndividualAllocation = {
   meetingsAssigned: number;
   preferredSlotCount: number;
   individualRankTotal: number;
+  allResponsesAssigned: boolean;
+  assignmentCountOptimal: boolean;
+  searchLimitReached: boolean;
+  searchNodes: number;
+  searchNodeLimit: number;
 };
+
+export type IndividualAllocationOptions = Pick<CandidateWindowOptions, "allowedSlots" | "preferredSlots"> & {
+  searchNodeLimit?: number;
+};
+
+export const DEFAULT_ALLOCATION_SEARCH_NODE_LIMIT = 100_000;
 
 export function availabilityScores(
   base: BaseAllocation,
@@ -132,12 +143,14 @@ export function findCandidateWindows(
 export function allocateIndividualMeetings(
   base: BaseAllocation,
   participants: ParticipantAllocation[],
-  options: Pick<CandidateWindowOptions, "allowedSlots" | "preferredSlots"> = {},
+  options: IndividualAllocationOptions = {},
 ): IndividualAllocation {
+  const searchNodeLimit = options.searchNodeLimit ?? DEFAULT_ALLOCATION_SEARCH_NODE_LIMIT;
   const durationSlots = base.meetingMinutes / base.slotMinutes;
   const candidatesByParticipant = participants.map((participant, participantIndex) =>
     findCandidateWindows(base, [participant], {
-      ...options,
+      allowedSlots: options.allowedSlots,
+      preferredSlots: options.preferredSlots,
       diversifyDays: false,
       limit: base.slotCount,
       minimumAttendees: 1,
@@ -155,6 +168,9 @@ export function allocateIndividualMeetings(
   const currentAssignments: Array<IndividualMeetingAssignment | undefined> = Array(participants.length);
   const occupiedStarts: number[] = [];
   let best: IndividualAllocation | null = null;
+  let searchNodes = 0;
+  let searchLimitReached = false;
+  let allResponsesAssigned = participants.length === 0;
 
   const overlaps = (candidate: IndividualMeetingAssignment) => occupiedStarts.some((startSlot) =>
     candidate.startSlot < startSlot + durationSlots && candidate.endSlot > startSlot
@@ -173,63 +189,38 @@ export function allocateIndividualMeetings(
       meetingsAssigned: assignments.length,
       preferredSlotCount,
       individualRankTotal,
+      allResponsesAssigned: assignments.length === participants.length,
+      assignmentCountOptimal: false,
+      searchLimitReached: false,
+      searchNodes: 0,
+      searchNodeLimit,
     };
   };
-  const isBetter = (candidate: IndividualAllocation, incumbent: IndividualAllocation | null): boolean => {
-    if (!incumbent) return true;
-    if (candidate.meetingsAssigned !== incumbent.meetingsAssigned) {
-      return candidate.meetingsAssigned > incumbent.meetingsAssigned;
-    }
-    if (candidate.preferredSlotCount !== incumbent.preferredSlotCount) {
-      return candidate.preferredSlotCount > incumbent.preferredSlotCount;
-    }
-    if (candidate.individualRankTotal !== incumbent.individualRankTotal) {
-      return candidate.individualRankTotal < incumbent.individualRankTotal;
-    }
-    for (let participantIndex = 0; participantIndex < participants.length; participantIndex += 1) {
-      const candidateStart = candidate.assignments.find((assignment) =>
-        assignment.participantIndex === participantIndex
-      )?.startSlot ?? Number.POSITIVE_INFINITY;
-      const incumbentStart = incumbent.assignments.find((assignment) =>
-        assignment.participantIndex === participantIndex
-      )?.startSlot ?? Number.POSITIVE_INFINITY;
-      if (candidateStart !== incumbentStart) return candidateStart < incumbentStart;
-    }
-    return false;
-  };
-
   const visit = (
     orderIndex: number,
     preferredSlotCount: number,
     individualRankTotal: number,
   ) => {
-    if (orderIndex === participantOrder.length) {
-      const candidate = snapshot(preferredSlotCount, individualRankTotal);
-      if (isBetter(candidate, best)) best = candidate;
+    if (allResponsesAssigned || searchLimitReached) return;
+    if (searchNodes >= searchNodeLimit) {
+      searchLimitReached = true;
       return;
     }
+    searchNodes += 1;
 
-    const remainingIndexes = participantOrder.slice(orderIndex);
-    const compatibleByParticipant = remainingIndexes.map((participantIndex) =>
-      candidatesByParticipant[participantIndex].filter((candidate) => !overlaps(candidate))
-    );
-    const possibleCount = compatibleByParticipant.filter((candidates) => candidates.length > 0).length;
-    const assignedCount = occupiedStarts.length;
-    if (best && assignedCount + possibleCount < best.meetingsAssigned) return;
-    if (best && assignedCount + possibleCount === best.meetingsAssigned) {
-      const preferredUpperBound = preferredSlotCount + compatibleByParticipant.reduce(
-        (total, candidates) => total + Math.max(0, ...candidates.map((candidate) => candidate.preferredSlotCount)),
-        0,
-      );
-      if (preferredUpperBound < best.preferredSlotCount) return;
-      if (preferredUpperBound === best.preferredSlotCount) {
-        const rankLowerBound = individualRankTotal + compatibleByParticipant.reduce(
-          (total, candidates) => total + (candidates[0]?.individualRank ?? 0),
-          0,
-        );
-        if (rankLowerBound > best.individualRankTotal) return;
-      }
+    const candidate = snapshot(preferredSlotCount, individualRankTotal);
+    if (!best || candidate.meetingsAssigned > best.meetingsAssigned) best = candidate;
+    if (candidate.meetingsAssigned === participants.length) {
+      allResponsesAssigned = true;
+      return;
     }
+    if (orderIndex === participantOrder.length) return;
+
+    const assignedCount = occupiedStarts.length;
+    const possibleCount = participantOrder.slice(orderIndex).filter((participantIndex) =>
+      candidatesByParticipant[participantIndex].length > 0
+    ).length;
+    if (best && assignedCount + possibleCount <= best.meetingsAssigned) return;
 
     const participantIndex = participantOrder[orderIndex];
     for (const candidate of candidatesByParticipant[participantIndex]) {
@@ -248,5 +239,13 @@ export function allocateIndividualMeetings(
   };
 
   visit(0, 0, 0);
-  return best ?? snapshot(0, 0);
+  const result = best ?? snapshot(0, 0);
+  return {
+    ...result,
+    allResponsesAssigned,
+    assignmentCountOptimal: allResponsesAssigned || !searchLimitReached,
+    searchLimitReached,
+    searchNodes,
+    searchNodeLimit,
+  };
 }

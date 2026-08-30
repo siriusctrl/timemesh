@@ -154,4 +154,51 @@ describe("overlap planner", () => {
     expect(allocation.unassignedParticipantIndexes).toEqual([1]);
     expect(allocation.candidateCounts).toEqual([1, 1]);
   });
+
+  test("stops after the first complete allocation when many equivalent schedules exist", () => {
+    const base = createBaseAllocation({
+      startDate: "2026-09-01",
+      days: 14,
+      timezone: "UTC",
+      meetingMinutes: 60,
+    });
+    const workdaySlots = Array.from({ length: 36 }, (_, index) => 36 + index);
+    const participant = (): ParticipantAllocation => ({
+      version: PROTOCOL_VERSION,
+      kind: "participant",
+      baseRef: new Uint8Array(8),
+      free: createBitset(base.slotCount, workdaySlots),
+    });
+    const allocation = allocateIndividualMeetings(base, Array.from({ length: 8 }, participant));
+
+    expect(allocation.meetingsAssigned).toBe(8);
+    expect(allocation.allResponsesAssigned).toBe(true);
+    expect(allocation.assignmentCountOptimal).toBe(true);
+    expect(allocation.searchLimitReached).toBe(false);
+    expect(allocation.searchNodes).toBeLessThan(20);
+  });
+
+  test("marks a bounded partial search as best effort", () => {
+    const base = createBaseAllocation({
+      startDate: "2026-09-01",
+      days: 1,
+      timezone: "UTC",
+      meetingMinutes: 60,
+    });
+    const participant = (): ParticipantAllocation => ({
+      version: PROTOCOL_VERSION,
+      kind: "participant",
+      baseRef: new Uint8Array(8),
+      free: createBitset(base.slotCount, [36, 37, 38, 39, 40, 41, 42, 43]),
+    });
+    const allocation = allocateIndividualMeetings(base, [participant(), participant()], {
+      searchNodeLimit: 2,
+    });
+
+    expect(allocation.meetingsAssigned).toBe(1);
+    expect(allocation.allResponsesAssigned).toBe(false);
+    expect(allocation.assignmentCountOptimal).toBe(false);
+    expect(allocation.searchLimitReached).toBe(true);
+    expect(allocation.searchNodes).toBe(2);
+  });
 });

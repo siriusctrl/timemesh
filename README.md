@@ -159,7 +159,7 @@ npm run token -- allocate \
   --timezone Asia/Shanghai
 ```
 
-The allocation first maximizes how many respondents can be scheduled, then applies `preferredRanges`, individual candidate rank, response order, and start time as transparent tie-breaks. Organizer availability, `allowedRanges`, one meeting per response, and no organizer overlap are hard constraints. `minimumAttendees` applies only to shared comparison.
+The allocator uses a deterministic good-enough search: it schedules respondents with fewer feasible windows first, tries `preferredRanges` before earlier alternatives, and stops once everyone has a valid meeting rather than exhaustively reranking equivalent complete schedules. Organizer availability, `allowedRanges`, one meeting per response, and no organizer overlap remain hard constraints. A fixed node budget bounds difficult searches, and the JSON `search` object says whether the returned assignment count was proven optimal. `minimumAttendees` applies only to shared comparison.
 
 ## Verification
 

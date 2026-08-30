@@ -56,7 +56,7 @@ The CLI source and frontend both import `src/protocol/codec.ts`. The Skill build
 
 Multi-response planning is also deterministic. Organizer-unavailable time and optional owner `allowedRanges` are hard constraints. `minimumAttendees` can filter candidates. Attendance ranks first, optional `preferredRanges` breaks attendance ties, and time breaks remaining ties. The tool exposes those fields and a ranked candidate set instead of claiming to infer an organizer's unstated preferences.
 
-Separate one-to-one planning is a distinct operation. The allocator chooses at most one meeting per response, forbids organizer overlap, and optimizes the whole set rather than combining independent first choices. It first maximizes assigned responses, then preferred-slot coverage, then individual candidate rank, with response order and earlier starts as stable final tie-breaks. An allocation is derived output and never changes or extends the token protocol.
+Separate one-to-one planning is a distinct operation. The allocator chooses at most one meeting per response, forbids organizer overlap, and coordinates responses instead of combining independent first choices. It uses a deterministic constrained-first heuristic, tries preferred and earlier candidates first, and accepts the first complete allocation because equivalent complete schedules are common. A fixed search-node budget bounds pathological partial allocations; output metadata distinguishes a proven assignment count from best effort. An allocation is derived output and never changes or extends the token protocol.
 
 When names are present, planner indexes still refer to decoded response order while CLI and UI projections expose the corresponding display names. Ranking rules never depend on a name.
 

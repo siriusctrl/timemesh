@@ -113,9 +113,9 @@ When the organizer wants a separate meeting with each respondent, run one joint 
 node scripts/time-token.mjs allocate --bundle-file /absolute/path/bundles.txt --timezone Area/City
 ```
 
-The allocator chooses at most one full meeting for each response and never double-books the organizer. Its deterministic objective is, in order: assign more responses, cover more organizer-preferred slots, minimize the sum of each response's individual candidate rank, then stabilize exact ties by response order and earlier starts. It may move a flexible respondent away from their individually earliest time so a more constrained respondent can still be scheduled.
+The allocator chooses at most one full meeting for each response and never double-books the organizer. It uses a deterministic good-enough search: schedule the most constrained responses first, try organizer-preferred windows before earlier alternatives, and stop as soon as everyone has a valid meeting instead of exhaustively ranking equivalent complete schedules. Bounded backtracking can move a flexible respondent away from their individually earliest time so a more constrained respondent can still be scheduled.
 
-`allowedRanges` and `preferredRanges` use the same optional preferences file shown above. `minimumAttendees` belongs only to shared comparison and is rejected by `allocate`. Report every assignment and any `unassignedResponses`; distinguish `no-feasible-window` from `schedule-conflict`. The allocation is a planning result, not a new token, and the organizer still makes the final choice.
+`allowedRanges` and `preferredRanges` use the same optional preferences file shown above. `minimumAttendees` belongs only to shared comparison and is rejected by `allocate`. Report every assignment, `search`, and any `unassignedResponses`; distinguish `no-feasible-window` from `schedule-conflict`. If `search.limitReached` is true and `search.assignmentCountOptimal` is false, describe the result as best effort and suggest narrower `allowedRanges`. The allocation is a planning result, not a new token, and the organizer still makes the final choice.
 
 ## Handoff
 

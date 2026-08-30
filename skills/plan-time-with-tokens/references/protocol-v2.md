@@ -93,7 +93,7 @@ A conforming decoder rejects:
 - a participant slot count that differs from its base;
 - a participant `baseRef` that does not match the supplied base.
 
-Planning should de-duplicate identical participant token text. Transport input may repeat the same base token when several complete response bundles are concatenated; normalize identical copies and reject distinct bases.
+Planning should apply the transport composition rules in section 8: de-duplicate repeated unlabeled participant tokens and repeated `(label, token)` pairs, while preserving identical token text carrying distinct labels as distinct responses. Transport input may repeat the same base token when several complete response bundles are concatenated; normalize identical copies and reject distinct bases.
 
 ## 7. Time semantics
 

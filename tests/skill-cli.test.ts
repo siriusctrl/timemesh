@@ -150,6 +150,11 @@ describe("portable TimeMesh Skill CLI", () => {
       objective: { meetingsAssigned: number };
       assignments: Array<{ responseName: string; start: string; end: string }>;
       unassignedResponses: Array<{ responseName: string; reason: string; candidateCount: number }>;
+      search: {
+        limitReached: boolean;
+        allResponsesAssigned: boolean;
+        assignmentCountOptimal: boolean;
+      };
       noOrganizerOverlap: boolean;
       validation: string;
     };
@@ -171,6 +176,35 @@ describe("portable TimeMesh Skill CLI", () => {
       { responseNumber: 3, responseName: "Cara", reason: "no-feasible-window", candidateCount: 0 },
     ]);
     expect(result.noOrganizerOverlap).toBe(true);
+    expect(result.search).toMatchObject({
+      limitReached: false,
+      allResponsesAssigned: false,
+      assignmentCountOptimal: true,
+    });
     expect(result.validation).toBe("VALID allocation");
+  });
+
+  test("rejects planning commands without participant responses", async () => {
+    const directory = await temporaryDirectory();
+    const base = createBaseAllocation({
+      startDate: "2026-09-01",
+      days: 1,
+      timezone: "UTC",
+    });
+    const bundlePath = path.join(directory, "base-only.txt");
+    await writeFile(bundlePath, encodeBaseToken(base));
+
+    await expect(run(process.execPath, [
+      cli,
+      "compare",
+      "--bundle-file",
+      bundlePath,
+    ], { cwd: directory })).rejects.toThrow(/compare requires at least one participant response/u);
+    await expect(run(process.execPath, [
+      cli,
+      "allocate",
+      "--bundle-file",
+      bundlePath,
+    ], { cwd: directory })).rejects.toThrow(/allocate requires at least one participant response/u);
   });
 });
