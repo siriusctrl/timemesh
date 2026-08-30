@@ -82,6 +82,27 @@ test("searches and selects a display time zone", async ({ page }) => {
   await expect(timeZone).toHaveValue("Asia/Tokyo");
 });
 
+test("renders the organizer time zone as one unified control", async ({ page }) => {
+  await page.goto("./");
+  const input = page.getByRole("combobox", { name: "Organizer time zone" });
+  const control = input.locator("xpath=..");
+  const label = page.locator('label[for="organizer-timezone"]');
+
+  await expect(input).toBeVisible();
+  await expect(control).toHaveCSS("height", "36px");
+  await expect(input).toHaveCSS("border-top-width", "0px");
+  await expect(input).toHaveCSS("border-radius", "0px");
+
+  const labelAlignment = await label.evaluate((node) => {
+    const icon = node.querySelector("svg");
+    if (!icon) return Number.POSITIVE_INFINITY;
+    const labelBox = node.getBoundingClientRect();
+    const iconBox = icon.getBoundingClientRect();
+    return Math.abs(labelBox.top + labelBox.height / 2 - (iconBox.top + iconBox.height / 2));
+  });
+  expect(labelAlignment).toBeLessThan(1);
+});
+
 test("fits a two-week grid without horizontal scrolling and shows the full day", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name === "mobile", "desktop grid compression check");
   await page.goto("./");
