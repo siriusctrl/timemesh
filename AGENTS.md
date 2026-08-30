@@ -4,7 +4,7 @@ This file is the operating map for agents working in this repository. Keep produ
 
 ## Source map
 
-- `src/protocol/types.ts`: Token v1 limits, prefixes, domain types, and typed errors.
+- `src/protocol/types.ts`: Token v2 limits, prefixes, domain types, and typed errors.
 - `src/protocol/bits.ts`: canonical least-significant-bit-first availability bitmaps.
 - `src/protocol/crc32.ts`: token corruption checksum.
 - `src/protocol/codec.ts`: the only maintained base and participant binary codec.
@@ -12,7 +12,7 @@ This file is the operating map for agents working in this repository. Keep produ
 - `src/protocol/planner.ts`: visualization-neutral slot scores and continuous-window ranking.
 - `src/components/CalendarGrid.tsx`: drag and keyboard allocation editor plus overlap heatmap.
 - `src/App.tsx`: browser-local workflow state and token composition.
-- `skills/plan-time-with-tokens/`: reusable agent workflow, deterministic CLI, and Token v1 reference.
+- `skills/plan-time-with-tokens/`: reusable agent workflow, deterministic CLI, and Token v2 reference.
 - `tests/`: protocol, planner, and Playwright behavior.
 - `scripts/record-proof.mjs`: desktop/mobile visual evidence and contact sheet.
 - `public/404.html`: GitHub Pages deep-route recovery for `/timemesh/t/<token>`.
@@ -21,8 +21,8 @@ This file is the operating map for agents working in this repository. Keep produ
 ## Core invariants
 
 - Tokens are the source of truth. Do not introduce an invitation, session, user, or server-side identity model.
-- `tm1b_` contains the absolute frame and organizer-unavailable bitmap. `tm1p_` contains a truncated SHA-256 base reference and participant-free bitmap only.
-- Keep Token v1 deterministic and canonical. The same allocation must produce the same bytes, unused bitmap bits must be zero, and decoders must reject trailing data.
+- `tm2b_` contains the absolute frame and compressed organizer-unavailable bitmap. `tm2p_` contains a truncated SHA-256 base reference, slot count, and compressed participant-free bitmap only.
+- Keep Token v2 deterministic and canonical. The same allocation must produce the same bytes, unused bitmap bits must be zero, bitmap encoding must choose the shortest canonical representation, and decoders must reject trailing data.
 - Keep the default slot size at 15 minutes and the maximum local date window at 31 days.
 - Store the frame as UTC epoch minutes plus slot count. Keep an IANA time zone for calendar boundaries and display. Never use a fixed UTC offset as time-zone identity.
 - Keep participant tokens dependent on their exact base token. A base edit invalidates collected participant tokens by design.
@@ -34,7 +34,7 @@ This file is the operating map for agents working in this repository. Keep produ
 
 ## Task routing
 
-- Token field or binary-layout change: update `codec.ts`, the protocol reference, golden tests, CLI output, README, and architecture decisions together. A layout change requires a new prefix/version rather than silent Token v1 drift.
+- Token field or binary-layout change: update `codec.ts`, the protocol reference, golden tests, CLI output, README, and architecture decisions together. A layout change requires a new prefix/version rather than silent Token v2 drift.
 - Time-zone or window change: update `time.ts`, DST tests, protocol limits, and calendar projections together.
 - New planner ranking rule: implement it in `planner.ts` before projecting it in a component.
 - New agent workflow: update the Skill and deterministic CLI. Keep detailed binary documentation in the protocol reference.
@@ -59,7 +59,7 @@ npm run verify:proof
 
 Inspect `artifacts/verification/contact-sheet.png` and individual screenshots. A successful build does not prove drag selection, horizontal calendar scrolling, token restoration, dark mode, or mobile usability.
 
-For a protocol change, additionally use the CLI to generate, decode, and validate both token kinds. Confirm an old Token v1 golden vector still decodes or intentionally introduce a new protocol version.
+For a protocol change, additionally use the CLI to generate, decode, and validate both token kinds. Confirm the current Token v2 golden vectors remain stable or intentionally introduce a new protocol version.
 
 ## Documentation and handoff
 

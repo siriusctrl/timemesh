@@ -1,7 +1,8 @@
 import {
   assertCanonicalBitset,
-  byteLengthForSlots,
   createBitset,
+  decodeBitsetV2,
+  encodeBitsetV2,
 } from "./bits";
 import { appendChecksum, checksumMatches } from "./crc32";
 import {
@@ -19,6 +20,7 @@ import {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const BASE_REF_BYTES = 8;
+const PARTICIPANT_SLOT_COUNT_BYTES = 2;
 
 function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = "";
@@ -69,37 +71,28 @@ function assertTimeZone(value: string): void {
   }
 }
 
+function assertSlotCount(value: number): void {
+  if (!Number.isInteger(value) || value < 1 || value > MAX_SLOT_COUNT) {
+    throw new TokenError("invalid_contract", `Slot count must be between 1 and ${MAX_SLOT_COUNT}.`);
+  }
+}
+
 function assertBaseContract(base: BaseAllocation): void {
+  if (base.version !== PROTOCOL_VERSION) {
+    throw new TokenError("invalid_contract", `Unsupported protocol version ${base.version}.`);
+  }
   assertSlotMinutes(base.slotMinutes);
   assertMeetingMinutes(base.meetingMinutes, base.slotMinutes);
   if (!Number.isInteger(base.startEpochMinutes) || base.startEpochMinutes < 0 || base.startEpochMinutes > 0xffffffff) {
     throw new TokenError("invalid_contract", "Base start time is outside the supported range.");
   }
-  if (!Number.isInteger(base.slotCount) || base.slotCount < 1 || base.slotCount > MAX_SLOT_COUNT) {
-    throw new TokenError("invalid_contract", `Slot count must be between 1 and ${MAX_SLOT_COUNT}.`);
-  }
+  assertSlotCount(base.slotCount);
   const timezoneBytes = encoder.encode(base.timezone);
   if (timezoneBytes.length < 1 || timezoneBytes.length > 255) {
     throw new TokenError("invalid_contract", "Time zone must encode to 1-255 bytes.");
   }
   assertTimeZone(base.timezone);
   assertCanonicalBitset(base.unavailable, base.slotCount);
-}
-
-export function encodeBaseToken(base: BaseAllocation): string {
-  assertBaseContract(base);
-  const timezoneBytes = encoder.encode(base.timezone);
-  const headerLength = 10;
-  const payload = new Uint8Array(headerLength + timezoneBytes.length + base.unavailable.length);
-  const view = new DataView(payload.buffer);
-  view.setUint8(0, base.slotMinutes);
-  view.setUint16(1, base.meetingMinutes);
-  view.setUint32(3, base.startEpochMinutes);
-  view.setUint16(7, base.slotCount);
-  view.setUint8(9, timezoneBytes.length);
-  payload.set(timezoneBytes, headerLength);
-  payload.set(base.unavailable, headerLength + timezoneBytes.length);
-  return `${BASE_TOKEN_PREFIX}${bytesToBase64Url(appendChecksum(payload))}`;
 }
 
 function decodeCheckedPayload(token: string, prefix: string): Uint8Array {
@@ -114,10 +107,27 @@ function decodeCheckedPayload(token: string, prefix: string): Uint8Array {
   return bytes.subarray(0, bytes.length - 4);
 }
 
+export function encodeBaseToken(base: BaseAllocation): string {
+  assertBaseContract(base);
+  const timezoneBytes = encoder.encode(base.timezone);
+  const bitmapBytes = encodeBitsetV2(base.unavailable, base.slotCount);
+  const headerLength = 10;
+  const payload = new Uint8Array(headerLength + timezoneBytes.length + bitmapBytes.length);
+  const view = new DataView(payload.buffer);
+  view.setUint8(0, base.slotMinutes);
+  view.setUint16(1, base.meetingMinutes);
+  view.setUint32(3, base.startEpochMinutes);
+  view.setUint16(7, base.slotCount);
+  view.setUint8(9, timezoneBytes.length);
+  payload.set(timezoneBytes, headerLength);
+  payload.set(bitmapBytes, headerLength + timezoneBytes.length);
+  return `${BASE_TOKEN_PREFIX}${bytesToBase64Url(appendChecksum(payload))}`;
+}
+
 export function decodeBaseToken(token: string): BaseAllocation {
   const payload = decodeCheckedPayload(token, BASE_TOKEN_PREFIX);
-  if (payload.length < 11) {
-    throw new TokenError("invalid_length", "Base token is shorter than its required header.");
+  if (payload.length < 12) {
+    throw new TokenError("invalid_length", "Base token is shorter than its required fields.");
   }
   const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
   const slotMinutes = view.getUint8(0);
@@ -125,18 +135,15 @@ export function decodeBaseToken(token: string): BaseAllocation {
   const meetingMinutes = view.getUint16(1);
   const startEpochMinutes = view.getUint32(3);
   const slotCount = view.getUint16(7);
+  assertSlotCount(slotCount);
   const timezoneLength = view.getUint8(9);
-  const bitsetLength = byteLengthForSlots(slotCount);
-  const expectedLength = 10 + timezoneLength + bitsetLength;
-  if (payload.length !== expectedLength) {
-    throw new TokenError(
-      "invalid_length",
-      `Base payload should contain ${expectedLength} bytes, received ${payload.length}.`,
-    );
+  const bitmapOffset = 10 + timezoneLength;
+  if (timezoneLength < 1 || payload.length <= bitmapOffset) {
+    throw new TokenError("invalid_length", "Base token has incomplete time-zone or bitmap data.");
   }
   let timezone: string;
   try {
-    timezone = decoder.decode(payload.subarray(10, 10 + timezoneLength));
+    timezone = decoder.decode(payload.subarray(10, bitmapOffset));
   } catch {
     throw new TokenError("invalid_encoding", "Time zone text is not valid UTF-8.");
   }
@@ -148,7 +155,7 @@ export function decodeBaseToken(token: string): BaseAllocation {
     startEpochMinutes,
     slotCount,
     timezone,
-    unavailable: payload.slice(10 + timezoneLength),
+    unavailable: decodeBitsetV2(payload.subarray(bitmapOffset), slotCount),
   };
   assertBaseContract(base);
   return base;
@@ -173,9 +180,12 @@ export async function encodeParticipantToken(
   }
   const baseRef = await getBaseRef(baseToken);
   const free = createBitset(base.slotCount, freeSlots);
-  const payload = new Uint8Array(BASE_REF_BYTES + free.length);
+  const encodedFree = encodeBitsetV2(free, base.slotCount);
+  const bitmapOffset = BASE_REF_BYTES + PARTICIPANT_SLOT_COUNT_BYTES;
+  const payload = new Uint8Array(bitmapOffset + encodedFree.length);
   payload.set(baseRef);
-  payload.set(free, BASE_REF_BYTES);
+  new DataView(payload.buffer).setUint16(BASE_REF_BYTES, base.slotCount);
+  payload.set(encodedFree, bitmapOffset);
   return `${PARTICIPANT_TOKEN_PREFIX}${bytesToBase64Url(appendChecksum(payload))}`;
 }
 
@@ -192,14 +202,17 @@ export async function decodeParticipantToken(
   base?: BaseAllocation,
 ): Promise<ParticipantAllocation> {
   const payload = decodeCheckedPayload(token, PARTICIPANT_TOKEN_PREFIX);
-  if (payload.length <= BASE_REF_BYTES) {
+  const bitmapOffset = BASE_REF_BYTES + PARTICIPANT_SLOT_COUNT_BYTES;
+  if (payload.length <= bitmapOffset) {
     throw new TokenError("invalid_length", "Participant token has no availability bitmap.");
   }
+  const slotCount = new DataView(payload.buffer, payload.byteOffset, payload.byteLength).getUint16(BASE_REF_BYTES);
+  assertSlotCount(slotCount);
   const participant: ParticipantAllocation = {
     version: PROTOCOL_VERSION,
     kind: "participant",
     baseRef: payload.slice(0, BASE_REF_BYTES),
-    free: payload.slice(BASE_REF_BYTES),
+    free: decodeBitsetV2(payload.subarray(bitmapOffset), slotCount),
   };
   if (baseToken || base) {
     if (!baseToken || !base) {
@@ -209,15 +222,16 @@ export async function decodeParticipantToken(
     if (!equalBytes(expectedRef, participant.baseRef)) {
       throw new TokenError("base_mismatch", "Participant token belongs to a different base allocation.");
     }
+    if (slotCount !== base.slotCount) {
+      throw new TokenError("base_mismatch", "Participant slot count does not match its base allocation.");
+    }
     assertCanonicalBitset(participant.free, base.slotCount);
-  } else if (participant.free.length > byteLengthForSlots(MAX_SLOT_COUNT)) {
-    throw new TokenError("invalid_length", "Participant bitmap exceeds the one-month protocol limit.");
   }
   return participant;
 }
 
 export function extractTokens(input: string): string[] {
-  return input.match(/tm1[bp]_[A-Za-z0-9_-]+/gu) ?? [];
+  return input.match(/tm2[bp]_[A-Za-z0-9_-]+/gu) ?? [];
 }
 
 export async function decodeTokenBundle(input: string): Promise<TokenBundle> {
@@ -233,7 +247,7 @@ export async function decodeTokenBundle(input: string): Promise<TokenBundle> {
   const base = decodeBaseToken(baseToken);
   const participantTokens = tokens.filter((token) => token.startsWith(PARTICIPANT_TOKEN_PREFIX));
   const participants = await Promise.all(
-    participantTokens.map((token) => decodeParticipantToken(token, baseToken, base)),
+    participantTokens.map((participantToken) => decodeParticipantToken(participantToken, baseToken, base)),
   );
   return { baseToken, base, participantTokens, participants };
 }

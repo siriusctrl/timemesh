@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { bitsetToSet, createBitset } from "../src/protocol/bits";
+import { bitsetToSet, createBitset, decodeBitsetV2, encodeBitsetV2 } from "../src/protocol/bits";
 import {
   decodeBaseToken,
   decodeParticipantToken,
@@ -7,9 +7,12 @@ import {
   encodeBaseToken,
   encodeParticipantToken,
 } from "../src/protocol/codec";
-import { createBaseAllocation } from "../src/protocol/time";
+import { createBaseAllocation, workHoursSlotSet } from "../src/protocol/time";
 
-describe("TimeMesh Token v1", () => {
+const GOLDEN_BASE = "tm2b_DwA8AcbCwAVADUFzaWEvU2hhbmdoYWkCAxwBnwoB-20Utg";
+const GOLDEN_PARTICIPANT = "tm2p_10VrkaG4nj4CoAEoBCQBzwSx0AjZ";
+
+describe("TimeMesh Token v2", () => {
   test("round-trips a deterministic 15-minute base token", () => {
     const initial = createBaseAllocation({
       startDate: "2026-09-01",
@@ -24,7 +27,8 @@ describe("TimeMesh Token v1", () => {
     const decoded = decodeBaseToken(first);
 
     expect(first).toBe(second);
-    expect(first.startsWith("tm1b_")).toBe(true);
+    expect(first).toBe(GOLDEN_BASE);
+    expect(first.startsWith("tm2b_")).toBe(true);
     expect(decoded.slotMinutes).toBe(15);
     expect(decoded.slotCount).toBe(14 * 24 * 4);
     expect(decoded.timezone).toBe("Asia/Shanghai");
@@ -43,7 +47,8 @@ describe("TimeMesh Token v1", () => {
     const participantToken = await encodeParticipantToken(baseToken, base, free);
     const participant = await decodeParticipantToken(participantToken, baseToken, base);
 
-    expect(participantToken.startsWith("tm1p_")).toBe(true);
+    expect(participantToken).toBe(GOLDEN_PARTICIPANT);
+    expect(participantToken.startsWith("tm2p_")).toBe(true);
     expect(bitsetToSet(participant.free, base.slotCount)).toEqual(free);
     expect(participantToken).not.toContain("Europe");
 
@@ -107,5 +112,38 @@ describe("TimeMesh Token v1", () => {
     const bundle = await decodeTokenBundle(`${baseToken}\n${participant}`);
     expect(bundle.base.timezone).toBe("Asia/Tokyo");
     expect(bundle.participants).toHaveLength(1);
+  });
+
+  test("compresses a regular two-week schedule and round-trips its canonical bitmap", async () => {
+    const initial = createBaseAllocation({
+      startDate: "2026-09-01",
+      days: 14,
+      timezone: "Asia/Shanghai",
+      meetingMinutes: 60,
+    });
+    const workHours = workHoursSlotSet(initial, initial.timezone, 9, 18, true);
+    const unavailable = new Set<number>();
+    for (let index = 0; index < initial.slotCount; index += 1) {
+      if (!workHours.has(index)) unavailable.add(index);
+    }
+    const base = { ...initial, unavailable: createBitset(initial.slotCount, unavailable) };
+    const baseToken = encodeBaseToken(base);
+    const participantToken = await encodeParticipantToken(baseToken, base, workHours);
+
+    expect(baseToken.length).toBeLessThan(80);
+    expect(participantToken.length).toBeLessThan(60);
+    expect([...baseToken].filter((character) => character === "_")).toHaveLength(1);
+    expect(bitsetToSet(decodeBaseToken(baseToken).unavailable, base.slotCount)).toEqual(unavailable);
+    expect(bitsetToSet(
+      (await decodeParticipantToken(participantToken, baseToken, base)).free,
+      base.slotCount,
+    )).toEqual(workHours);
+  });
+
+  test("rejects a longer noncanonical bitmap spelling", () => {
+    const slotCount = 96;
+    const bitset = createBitset(slotCount);
+    expect(encodeBitsetV2(bitset, slotCount).length).toBeLessThan(bitset.length + 1);
+    expect(() => decodeBitsetV2(Uint8Array.of(0, ...bitset), slotCount)).toThrowError(/canonical/u);
   });
 });

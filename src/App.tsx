@@ -76,9 +76,9 @@ function errorMessage(error: unknown): string {
 }
 
 function routeToken(): string | null {
-  const pathMatch = window.location.pathname.match(/\/t\/(tm1[bp]_[A-Za-z0-9_-]+)/u);
+  const pathMatch = window.location.pathname.match(/\/t\/(tm2[bp]_[A-Za-z0-9_-]+)/u);
   if (pathMatch) return pathMatch[1];
-  const hashMatch = window.location.hash.match(/^#\/?(tm1[bp]_[A-Za-z0-9_-]+)/u);
+  const hashMatch = window.location.hash.match(/^#\/?(tm2[bp]_[A-Za-z0-9_-]+)/u);
   return hashMatch?.[1] ?? null;
 }
 
@@ -107,7 +107,7 @@ export default function App() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
   const [displayTimezone, setDisplayTimezone] = useState(systemTimeZone);
-  const [fullDay, setFullDay] = useState(false);
+  const [fullDay, setFullDay] = useState(true);
   const [skillOpen, setSkillOpen] = useState(false);
   const [copiedValue, setCopiedValue] = useState<"token" | "url" | null>(null);
 
@@ -303,10 +303,13 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="site-header">
-        <a className="brand" href={import.meta.env.BASE_URL}>
-          <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span>
-          <span>TimeMesh</span>
-        </a>
+        <div className="header-identity">
+          <a className="brand" href={import.meta.env.BASE_URL}>
+            <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span>
+            <span>TimeMesh</span>
+          </a>
+          <h1 className="header-tagline">Shared time, <em>encoded.</em></h1>
+        </div>
         <nav aria-label="Primary">
           <button onClick={() => setSkillOpen(true)} type="button">
             <Robot aria-hidden="true" size={17} />
@@ -328,12 +331,7 @@ export default function App() {
       </header>
 
       <main>
-        <section className="hero-workbench">
-          <div className="hero-copy">
-            <span className="hero-kicker">Local scheduling protocol</span>
-            <h1>Shared time,<br /><em>encoded.</em></h1>
-            <p>Share availability, compare overlap, and keep every calendar in this tab.</p>
-          </div>
+        <section className="command-strip">
           <TokenConsole
             busy={busy}
             notice={notice}
@@ -470,13 +468,13 @@ export default function App() {
         <section className="protocol-note">
           <div>
             <span>One coordinate system</span>
-            <strong>tm1b_</strong>
+            <strong>tm2b_</strong>
             <p>Window, 15-minute grid, time zone and organizer constraints.</p>
           </div>
           <div className="protocol-operator">+</div>
           <div>
             <span>Independent responses</span>
-            <strong>tm1p_ × n</strong>
+            <strong>tm2p_ × n</strong>
             <p>Base fingerprint and free-time bitmap. No organizer data repeated.</p>
           </div>
           <div className="protocol-operator">=</div>

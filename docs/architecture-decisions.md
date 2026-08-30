@@ -14,19 +14,19 @@ Different canonical allocations produce different token payloads. Equal allocati
 
 ## 3. Base and participant data stay separate
 
-A `tm1b_` token contains:
+A `tm2b_` token contains:
 
 - slot size and meeting duration;
 - absolute start as UTC epoch minutes;
 - absolute slot count;
 - organizer IANA time zone;
-- organizer-unavailable bitmap;
+- organizer-unavailable bitmap encoded as raw bytes or bit-run lengths, whichever is shorter;
 - CRC32 checksum.
 
-A `tm1p_` token contains:
+A `tm2p_` token contains:
 
 - the first eight bytes of SHA-256 over the complete base token;
-- participant-free bitmap;
+- slot count and a compressed participant-free bitmap;
 - CRC32 checksum.
 
 It does not duplicate the base window, time zone, meeting duration, or organizer availability. A participant token therefore needs its base to recover real dates. Editing a base intentionally invalidates prior responses.
@@ -39,15 +39,17 @@ This means a 14-day window that crosses a daylight-saving transition can contain
 
 TimeMesh does not store a fixed UTC offset as time-zone identity. It uses IANA names such as `Asia/Shanghai` and `America/New_York`.
 
-## 5. Token v1 is intentionally bounded
+## 5. Token v2 is compressed and intentionally bounded
 
-Token v1 supports:
+Token v2 supports:
 
 - 1-31 local calendar days;
 - 15, 30, or 60-minute slots;
 - 15-240-minute meeting durations aligned to the slot size;
 - one bit per slot for organizer unavailability or participant availability;
 - one base and any number of matching participants in a planning bundle.
+
+Each bitmap chooses between raw bytes and alternating bit-run lengths. The shorter representation is canonical; raw wins ties. This turns common empty or work-hour schedules into short tokens without making irregular bitmaps larger. A decoder re-encodes the decoded bitmap and rejects any longer equivalent spelling.
 
 The bounded window keeps tokens URL-sized and the local planner responsive. Recurring rules and arbitrary historical ranges are separate future protocol problems.
 

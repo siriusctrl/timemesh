@@ -6,8 +6,8 @@ A backend-free, token-first tool for exchanging availability and finding shared 
 
 ```text
 Organizer constraints
-  -> reversible tm1b_ base token
-  -> independent tm1p_ participant tokens
+  -> reversible tm2b_ base token
+  -> independent tm2p_ participant tokens
   -> browser-local overlap planner
 ```
 
@@ -16,7 +16,7 @@ TimeMesh has no accounts, database, API, or synchronization service. The token i
 ## What the MVP proves
 
 - A base token can encode a one-month-or-shorter absolute time frame, an IANA time zone, a 15-minute default grid, meeting duration, and organizer unavailability.
-- A participant token can encode only a base fingerprint and the participant's free-time bitmap. It does not repeat the organizer's availability.
+- A participant token encodes only a base fingerprint, slot count, and compressed free-time bitmap. It does not repeat the organizer's availability.
 - Tokens are deterministic and reversible. The same canonical allocation produces the same token, and a checksum rejects damaged input.
 - Multiple participant tokens can be composed after one base token and ranked without a server.
 - The same slot is displayed correctly in a different IANA time zone, including daylight-saving boundaries.
@@ -29,13 +29,13 @@ TimeMesh has no accounts, database, API, or synchronization service. The token i
 
 1. Choose the date window, organizer time zone, meeting duration, and slot size. The default grid is 15 minutes and the maximum window is 31 local calendar days.
 2. Mark organizer-unavailable slots. The weekday 09:00-18:00 preset blocks nights and weekends in one action.
-3. Generate a `tm1b_...` token and share the token itself.
+3. Generate a `tm2b_...` token and share the token itself.
 
 ### Add availability
 
 1. Paste or open the base token.
 2. TimeMesh reconstructs the absolute frame and displays it in the participant's time zone.
-3. Mark free slots and generate a `tm1p_...` token.
+3. Mark free slots and generate a `tm2p_...` token.
 4. Send only that participant token back to the organizer.
 
 ### Plan
@@ -43,9 +43,9 @@ TimeMesh has no accounts, database, API, or synchronization service. The token i
 Paste one base followed by any number of participant tokens:
 
 ```text
-tm1b_...
-tm1p_...
-tm1p_...
+tm2b_...
+tm2p_...
+tm2p_...
 ```
 
 The browser validates every base reference, computes an overlap heatmap, and ranks continuous windows for the configured meeting duration.
@@ -65,7 +65,7 @@ timemesh/
 └── .github/workflows/pages.yml    # verified GitHub Pages deployment
 ```
 
-`src/protocol/codec.ts` is the only maintained binary Token v1 implementation. The web app and the skill CLI both import it.
+`src/protocol/codec.ts` is the only maintained binary Token v2 implementation. The web app and the skill CLI both import it.
 
 ## Local development
 
@@ -95,7 +95,7 @@ Create a participant response:
 
 ```sh
 npm run token -- participant \
-  --base 'tm1b_...' \
+  --base 'tm2b_...' \
   --free-json availability/free.json
 ```
 
@@ -115,9 +115,9 @@ Range files contain explicit absolute or bracketed IANA-zone boundaries:
 Validate and inspect a token:
 
 ```sh
-npm run token -- validate 'tm1b_...'
-npm run token -- decode 'tm1b_...'
-npm run token -- validate 'tm1p_...' --base 'tm1b_...'
+npm run token -- validate 'tm2b_...'
+npm run token -- decode 'tm2b_...'
+npm run token -- validate 'tm2p_...' --base 'tm2b_...'
 ```
 
 The CLI writes the generated token to stdout and its human-readable summary to stderr, which makes command substitution and pipelines predictable.
@@ -148,7 +148,7 @@ npm run verify:proof
 
 Implemented in the kickoff MVP:
 
-- Token v1 base and participant codecs;
+- Token v2 base and participant codecs with canonical bitmap compression;
 - CRC32 corruption detection and SHA-256 base binding;
 - 15/30/60-minute grids with a 15-minute default;
 - maximum 31-day local window with DST-safe absolute slots;
@@ -166,4 +166,4 @@ Deferred:
 - automatic token collection, messaging, or event creation;
 - accounts, persistence, authentication, or a backend.
 
-See [architecture decisions](docs/architecture-decisions.md) and the [Token v1 protocol](skills/plan-time-with-tokens/references/protocol-v1.md) for the durable boundaries.
+See [architecture decisions](docs/architecture-decisions.md) and the [Token v2 protocol](skills/plan-time-with-tokens/references/protocol-v2.md) for the durable boundaries.

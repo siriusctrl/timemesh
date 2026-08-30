@@ -19,24 +19,25 @@ export function TokenConsole({
     <section className="token-console" aria-label="Token console">
       <div className="console-label">
         <BracketsCurly aria-hidden="true" size={18} weight="bold" />
-        <span>Token console</span>
-        <span className="local-note">decoded in this tab</span>
+        <span>Tokens</span>
       </div>
-      <div className="console-entry">
+      <div className="console-input">
         <textarea
           aria-label="TimeMesh tokens"
           onChange={(event) => onChange(event.target.value)}
-          placeholder={"Paste tm1b_... followed by any tm1p_... tokens"}
-          rows={3}
+          placeholder={"Paste tm2b_... followed by any tm2p_... tokens"}
+          rows={1}
           spellCheck={false}
           value={value}
         />
-        <button className="primary-action console-action" disabled={busy} onClick={onDecode} type="button">
-          {busy ? "Decoding" : "Open tokens"}
-          <ArrowRight aria-hidden="true" size={17} weight="bold" />
-        </button>
+        {notice
+          ? <p className={`console-notice ${notice.kind}`} role="status">{notice.message}</p>
+          : <span className="local-note">Decoded locally in this tab</span>}
       </div>
-      {notice ? <p className={`console-notice ${notice.kind}`} role="status">{notice.message}</p> : null}
+      <button className="primary-action console-action" disabled={busy} onClick={onDecode} type="button">
+        {busy ? "Decoding" : "Open tokens"}
+        <ArrowRight aria-hidden="true" size={15} weight="bold" />
+      </button>
     </section>
   );
 }

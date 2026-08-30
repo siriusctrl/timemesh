@@ -85,7 +85,7 @@ export function CalendarGrid({
       <div className="calendar-scroll">
         <div
           className="calendar-grid"
-          style={{ gridTemplateColumns: `64px repeat(${visibleDays.length}, minmax(112px, 1fr))` }}
+          style={{ gridTemplateColumns: `48px repeat(${visibleDays.length}, minmax(56px, 1fr))` }}
         >
           <div className="calendar-corner">Time</div>
           {visibleDays.map((day) => (

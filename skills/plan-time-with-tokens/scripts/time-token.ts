@@ -28,9 +28,9 @@ import {
 function usage(): never {
   console.error(`Usage:
   time-token base --start YYYY-MM-DD --days N --timezone Area/City [--slot 15] [--meeting 60] [--unavailable-json path]
-  time-token participant --base tm1b_... --free-json path
-  time-token validate TOKEN [--base tm1b_...]
-  time-token decode TOKEN [--base tm1b_...]`);
+  time-token participant --base tm2b_... --free-json path
+  time-token validate TOKEN [--base tm2b_...]
+  time-token decode TOKEN [--base tm2b_...]`);
   process.exit(2);
 }
 
@@ -167,7 +167,7 @@ try {
         freeRanges: selectedRanges(base, participant.free),
       }, null, 2));
     } else {
-      throw new Error("Token must start with tm1b_ or tm1p_.");
+      throw new Error("Token must start with tm2b_ or tm2p_.");
     }
   } else {
     usage();
