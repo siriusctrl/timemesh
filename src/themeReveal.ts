@@ -1,7 +1,7 @@
 export type RevealTheme = "light" | "dark";
 
 const REVEAL_DURATION = 920;
-const REVEAL_KEYFRAME_COUNT = 61;
+const REVEAL_KEYFRAME_COUNT = 121;
 const REVEAL_CURVE = [
   { offset: 0, radius: 0 },
   { offset: 0.16, radius: 0.025 },

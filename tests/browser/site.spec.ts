@@ -261,7 +261,7 @@ test("opens the agent skill and switches appearance", async ({ page }) => {
     return state;
   });
   expect(revealState.animationId).toBe("theme-reveal");
-  expect(revealState.keyframeCount).toBe(61);
+  expect(revealState.keyframeCount).toBe(121);
   expect(revealState.rootTheme).toBe("light");
   expect(revealState.layerTheme).toBe("dark");
   expect(revealState.clonedStart).toBe("07:30");
